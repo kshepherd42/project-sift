@@ -1,5 +1,6 @@
 using ProjectSift.Application.Models;
 using ProjectSift.Domain.Abstractions.Infrastructure;
+using ProjectSift.Domain.Enums;
 using ProjectSift.Domain.Models;
 using ProjectSift.Service.Constants;
 
@@ -25,6 +26,21 @@ public sealed class BatchSubmissionService(
             return created;
         }
 
-        throw new BatchQueueFullException(ServiceConstants.BatchProcessing.QueueFullMessage);
+        _ = await _batchStore.UpdateAsync(
+            new BatchResult(
+                created.BatchId,
+                BatchStatus.Completed,
+                request.Payloads.Select(payload => new PayloadResult(payload.PayloadIndex, diagnostics:
+                [
+                    new ExtractionDiagnostic(
+                        ServiceConstants.BatchProcessing.QueueRejectedDiagnosticCode,
+                        ServiceConstants.BatchProcessing.QueueFullMessage)
+                ])),
+                created.CreatedUtc,
+                DateTimeOffset.UtcNow,
+                created.Etag),
+            cancellationToken);
+
+        throw new BatchQueueFullException(ServiceConstants.BatchProcessing.QueueFullMessage, created.BatchId);
     }
 }

@@ -56,4 +56,15 @@ public static class Guard
 
         return value;
     }
+
+    public static long Positive(long value, string paramName)
+    {
+        NonNegative(value, paramName);
+        if (value == 0)
+        {
+            throw new ArgumentOutOfRangeException(paramName, NonPositiveValueMessage);
+        }
+
+        return value;
+    }
 }
