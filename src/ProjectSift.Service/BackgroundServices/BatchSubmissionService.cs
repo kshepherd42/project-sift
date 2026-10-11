@@ -49,7 +49,7 @@ public sealed class BatchSubmissionService(
                         new ExtractionDiagnostic(
                             ServiceConstants.BatchProcessing.QueueRejectedDiagnosticCode,
                             ServiceConstants.BatchProcessing.QueueFullMessage)
-                    ])),
+                    ], payloadName: payload.PayloadName)),
                     created.CreatedUtc,
                     DateTimeOffset.UtcNow,
                     created.Etag),
@@ -81,7 +81,7 @@ public sealed class BatchSubmissionService(
                         new ExtractionDiagnostic(
                             ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode,
                             ServiceConstants.BatchProcessing.ProcessingCancelledMessage(nameof(OperationCanceledException)))
-                    ])),
+                    ], payloadName: payload.PayloadName)),
                     created.CreatedUtc,
                     DateTimeOffset.UtcNow,
                     created.Etag),

@@ -72,6 +72,11 @@ public sealed class BatchesController(
     {
         try
         {
+            if (file.Length > _uploadOptions.MaxFileBytes)
+            {
+                throw new UploadValidationException(ServiceMessages.FileSizeLimitExceededAt(payloadIndex, file.FileName));
+            }
+
             await using var stream = file.OpenReadStream();
 
             var length = checked((int)file.Length);
@@ -89,7 +94,7 @@ public sealed class BatchesController(
                 readTotal += bytesRead;
             }
 
-            return new PayloadInput(payloadIndex, bytes);
+            return new PayloadInput(payloadIndex, bytes, file.FileName);
         }
         catch (IOException)
         {
@@ -109,9 +114,11 @@ public sealed class BatchesController(
             result.Payloads
                 .Select(payload => new PayloadResponse(
                     payload.PayloadIndex,
+                    payload.PayloadName,
                     payload.Documents
                         .Select(document => new DocumentResponse(
                             document.DocumentIndex,
+                            document.DocumentName,
                             document.Type,
                             document.Status,
                             document.PropertyPaths.Select(path => new PropertyPathResponse(path.Value)).ToArray(),

@@ -119,6 +119,7 @@ Limitations:
 ### Upload and status behavior
 
 - Upload is validated for file existence/count/per-file size/total request size.
+- Upload validation reports all detected request issues in one response where practical (for example empty file plus oversized file).
 - `202 Accepted` is returned only after batch registration and queue acceptance.
 - Queue saturation returns `503` with queue-unavailable error and a completed batch diagnostic.
 - Unknown batch IDs return `404`.
@@ -137,8 +138,8 @@ Responses do not expose raw payload bytes or original JSON values.
 Representative response shape:
 
 - Batch: `batchId`, `status`, `payloads[]`, `createdUtc`, `completedUtc`
-- Payload: `payloadIndex`, `documents[]`, `diagnostics[]`
-- Document: `documentIndex`, `type`, `status`, `propertyPaths[]`, `diagnostics[]`
+- Payload: `payloadIndex`, `payloadName`, `documents[]`, `diagnostics[]`
+- Document: `documentIndex`, `documentName`, `type`, `status`, `propertyPaths[]`, `diagnostics[]`
 
 ## Configuration and resource limits
 

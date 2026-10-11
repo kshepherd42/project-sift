@@ -123,7 +123,7 @@ public sealed class BinaryJsonPayloadScanner
             }
         }
 
-        var payloadResult = _scannerResultFactory.CreatePayloadResult(payload.PayloadIndex, documents);
+        var payloadResult = _scannerResultFactory.CreatePayloadResult(payload.PayloadIndex, documents, payload.PayloadName);
         if (!reachedDocumentLimit)
         {
             return payloadResult;
@@ -136,7 +136,8 @@ public sealed class BinaryJsonPayloadScanner
         return new PayloadResult(
             payload.PayloadIndex,
             payloadResult.Documents,
-            payloadResult.Diagnostics.Concat([diagnostic]));
+            payloadResult.Diagnostics.Concat([diagnostic]),
+            payload.PayloadName);
     }
 
     private async Task<DocumentResult> ExtractCandidateAsync(

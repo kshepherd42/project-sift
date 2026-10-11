@@ -216,7 +216,7 @@ public sealed class BatchProcessingBackgroundService(
                 new ExtractionDiagnostic(
                     ServiceConstants.BatchProcessing.UnexpectedProcessingFailureCode,
                     ServiceConstants.BatchProcessing.UnexpectedProcessingFailureMessage(failureCategory))
-            ]))
+            ], payloadName: payload.PayloadName))
             .ToArray();
     }
 
@@ -228,7 +228,7 @@ public sealed class BatchProcessingBackgroundService(
                 new ExtractionDiagnostic(
                     ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode,
                     ServiceConstants.BatchProcessing.ProcessingCancelledMessage(failureCategory))
-            ]))
+            ], payloadName: payload.PayloadName))
             .ToArray();
     }
 }

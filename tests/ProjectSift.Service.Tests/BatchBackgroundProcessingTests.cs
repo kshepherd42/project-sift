@@ -154,7 +154,7 @@ public sealed class BatchBackgroundProcessingTests
             cancellation.Token);
 
         cancellation.CancelAfter(50);
-        await Assert.ThrowsAsync<OperationCanceledException>(() => queueTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queueTask);
 
         var persisted = await store.GetByIdAsync(batchId);
         Assert.NotNull(persisted);

@@ -67,7 +67,7 @@ Dependency direction is strict and inward:
 
 - `POST /v1/batches` (multipart form field `files`)
   - Returns `202 Accepted` only after batch registration and queue acceptance.
-  - Returns `400` for invalid uploads.
+  - Returns `400` for invalid uploads with aggregated validation details.
   - Returns `503` when queue capacity is full.
 - `GET /v1/batches/{batchId}`
   - Returns `200` with `Processing` or `Completed` status.
@@ -75,6 +75,7 @@ Dependency direction is strict and inward:
 - `GET /api/health`
 
 Responses never include raw payload bytes or original JSON values.
+Responses include both index and optional name fields (`payloadIndex` + `payloadName`, `documentIndex` + `documentName`) for stable ordering plus readable identifiers.
 
 ## Resource limits and safety controls
 

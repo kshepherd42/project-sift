@@ -158,8 +158,23 @@ public class BinaryJsonPayloadScannerTests
 
         var document = Assert.Single(result.Documents);
         Assert.Equal(DocumentStatus.Recovered, document.Status);
+        Assert.Equal("root", document.DocumentName);
         Assert.Equal("root.id", document.PropertyPaths.Single().Value);
         Assert.Contains(document.Diagnostics, diagnostic => diagnostic.Code == ExtractionDiagnosticCodes.CandidateIncompleteRecovered);
+    }
+
+    [Fact]
+    public async Task ScanAsync_WhenRecoveredCandidateStillInvalid_ShouldNotAddRecoveredDiagnostic()
+    {
+        var scanner = new BinaryJsonPayloadScanner();
+
+        var result = await scanner.ScanAsync(new PayloadInput(17, Encoding.UTF8.GetBytes("{}{\"broken\":")));
+
+        Assert.Equal(2, result.Documents.Count);
+        var failedDocument = result.Documents[1];
+        Assert.Equal(DocumentStatus.Failed, failedDocument.Status);
+        Assert.Contains(failedDocument.Diagnostics, diagnostic => diagnostic.Code == ExtractionDiagnosticCodes.CandidateInvalidJson);
+        Assert.DoesNotContain(failedDocument.Diagnostics, diagnostic => diagnostic.Code == ExtractionDiagnosticCodes.CandidateIncompleteRecovered);
     }
 
     [Fact]

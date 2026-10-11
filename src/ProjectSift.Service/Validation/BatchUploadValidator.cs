@@ -22,12 +22,15 @@ public sealed class BatchUploadValidator(IOptions<UploadLimitsOptions> options)
             throw new UploadValidationException(ServiceMessages.EmptyFileCollection);
         }
 
+        var issues = new List<string>();
+
         if (files.Count > _options.MaxFileCount)
         {
-            throw new UploadValidationException(ServiceMessages.FileCountLimitExceeded);
+            issues.Add(ServiceMessages.FileCountLimitExceeded);
         }
 
         long totalBytes = 0;
+        var requestSizeExceeded = false;
 
         for (var payloadIndex = 0; payloadIndex < files.Count; payloadIndex++)
         {
@@ -35,29 +38,36 @@ public sealed class BatchUploadValidator(IOptions<UploadLimitsOptions> options)
 
             if (file is null)
             {
-                throw new UploadValidationException(ServiceMessages.InvalidFileMetadataAt(payloadIndex));
+                issues.Add(ServiceMessages.InvalidFileMetadataAt(payloadIndex));
+                continue;
             }
 
             if (string.IsNullOrWhiteSpace(file.Name) || string.IsNullOrWhiteSpace(file.FileName))
             {
-                throw new UploadValidationException(ServiceMessages.InvalidFileMetadataAt(payloadIndex));
+                issues.Add(ServiceMessages.InvalidFileMetadataAt(payloadIndex));
             }
 
             if (file.Length <= 0)
             {
-                throw new UploadValidationException(ServiceMessages.EmptyFileAt(payloadIndex, file.FileName));
+                issues.Add(ServiceMessages.EmptyFileAt(payloadIndex, file.FileName));
             }
 
             if (file.Length > _options.MaxFileBytes)
             {
-                throw new UploadValidationException(ServiceMessages.FileSizeLimitExceededAt(payloadIndex, file.FileName));
+                issues.Add(ServiceMessages.FileSizeLimitExceededAt(payloadIndex, file.FileName));
             }
 
             totalBytes += file.Length;
-            if (totalBytes > _options.MaxRequestBytes)
+            if (!requestSizeExceeded && totalBytes > _options.MaxRequestBytes)
             {
-                throw new UploadValidationException(ServiceMessages.RequestSizeLimitExceededAt(payloadIndex));
+                issues.Add(ServiceMessages.RequestSizeLimitExceededAt(payloadIndex));
+                requestSizeExceeded = true;
             }
+        }
+
+        if (issues.Count > 0)
+        {
+            throw new UploadValidationException(issues);
         }
     }
 }

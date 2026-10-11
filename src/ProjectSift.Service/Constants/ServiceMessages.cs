@@ -2,6 +2,7 @@ namespace ProjectSift.Service.Constants;
 
 public static class ServiceMessages
 {
+    public const string UploadValidationFailed = "Upload validation failed.";
     public const string MissingFileCollection = "The upload request must include at least one file.";
     public const string EmptyFileCollection = "The upload request must include at least one file.";
     public const string FileCountLimitExceeded = "Uploaded file count exceeds configured limit.";

@@ -38,7 +38,7 @@ public sealed class BatchProcessor : IBatchProcessor
             }
             catch (PayloadProcessingException exception)
             {
-                payloadResults.Add(CreatePayloadExceptionResult(payload.PayloadIndex, exception.GetType().Name));
+                payloadResults.Add(CreatePayloadExceptionResult(payload.PayloadIndex, payload.PayloadName, exception.GetType().Name));
             }
         }
 
@@ -50,12 +50,12 @@ public sealed class BatchProcessor : IBatchProcessor
             DateTimeOffset.UtcNow);
     }
 
-    private static PayloadResult CreatePayloadExceptionResult(int payloadIndex, string exceptionType)
+    private static PayloadResult CreatePayloadExceptionResult(int payloadIndex, string? payloadName, string exceptionType)
     {
         var diagnostic = new ExtractionDiagnostic(
             BatchProcessingDiagnosticCodes.PayloadProcessingException,
             BatchProcessingMessages.PayloadProcessingException(exceptionType));
 
-        return new PayloadResult(payloadIndex, diagnostics: [diagnostic]);
+        return new PayloadResult(payloadIndex, diagnostics: [diagnostic], payloadName: payloadName);
     }
 }
