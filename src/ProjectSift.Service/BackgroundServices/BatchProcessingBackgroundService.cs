@@ -61,6 +61,37 @@ public sealed class BatchProcessingBackgroundService(
 
     private async Task PersistCompletedBatchAsync(string batchId, BatchResult processedResult, CancellationToken cancellationToken)
     {
+        await PersistWithRetriesAsync(
+            batchId,
+            current => BuildCompletedResult(current, processedResult),
+            onMissing: () => _logger.LogWarning(
+                "Batch {BatchId} could not be updated because it no longer exists.",
+                batchId),
+            onRetryExhausted: () => throw new ConflictException(ServiceConstants.BatchProcessing.ConflictRetryExhaustedMessage),
+            cancellationToken);
+    }
+
+    private async Task PersistFailedBatchAsync(BatchProcessingRequest request, string failureCategory, CancellationToken cancellationToken)
+    {
+        var diagnosticsPayloads = CreateFailurePayloads(request, failureCategory);
+        await PersistWithRetriesAsync(
+            request.BatchId,
+            current => BuildFailedResult(current, request.BatchId, diagnosticsPayloads),
+            onMissing: static () => { },
+            onRetryExhausted: () => _logger.LogWarning(
+                "Batch {BatchId} could not be marked completed after conflict retries. FailureCategory: {FailureCategory}",
+                request.BatchId,
+                failureCategory),
+            cancellationToken);
+    }
+
+    private async Task PersistWithRetriesAsync(
+        string batchId,
+        Func<BatchResult, BatchResult?> buildResult,
+        Action onMissing,
+        Action onRetryExhausted,
+        CancellationToken cancellationToken)
+    {
         for (var attempt = 1; attempt <= MaxConflictRetries; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -68,80 +99,69 @@ public sealed class BatchProcessingBackgroundService(
             var current = await _batchStore.GetByIdAsync(batchId, cancellationToken);
             if (current is null)
             {
-                _logger.LogWarning(
-                    "Batch {BatchId} could not be updated because it no longer exists.",
-                    batchId);
+                onMissing();
                 return;
             }
 
-            if (current.Status == BatchStatus.Completed)
+            var update = buildResult(current);
+            if (update is null)
             {
                 return;
             }
-
-            var completed = new BatchResult(
-                current.BatchId,
-                BatchStatus.Completed,
-                processedResult.Payloads,
-                current.CreatedUtc,
-                processedResult.CompletedUtc ?? DateTimeOffset.UtcNow,
-                current.Etag);
 
             try
             {
-                _ = await _batchStore.UpdateAsync(completed, cancellationToken);
+                _ = await _batchStore.UpdateAsync(update, cancellationToken);
                 return;
             }
             catch (ConflictException) when (attempt < MaxConflictRetries)
             {
             }
         }
-
-        throw new ConflictException(ServiceConstants.BatchProcessing.ConflictRetryExhaustedMessage);
+        onRetryExhausted();
     }
 
-    private async Task PersistFailedBatchAsync(BatchProcessingRequest request, string failureCategory, CancellationToken cancellationToken)
+    private static BatchResult? BuildCompletedResult(BatchResult current, BatchResult processedResult)
     {
-        for (var attempt = 1; attempt <= MaxConflictRetries; attempt++)
+        if (current.Status == BatchStatus.Completed)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var current = await _batchStore.GetByIdAsync(request.BatchId, cancellationToken);
-            if (current is null || current.Status == BatchStatus.Completed)
-            {
-                return;
-            }
-
-            var payloads = request.Payloads
-                .Select(payload => new PayloadResult(payload.PayloadIndex, diagnostics:
-                [
-                    new ExtractionDiagnostic(
-                        ServiceConstants.BatchProcessing.UnexpectedProcessingFailureCode,
-                        ServiceConstants.BatchProcessing.UnexpectedProcessingFailureMessage(failureCategory))
-                ]))
-                .ToArray();
-
-            var failedResult = new BatchResult(
-                request.BatchId,
-                BatchStatus.Completed,
-                payloads,
-                current.CreatedUtc,
-                DateTimeOffset.UtcNow,
-                current.Etag);
-
-            try
-            {
-                _ = await _batchStore.UpdateAsync(failedResult, cancellationToken);
-                return;
-            }
-            catch (ConflictException) when (attempt < MaxConflictRetries)
-            {
-            }
+            return null;
         }
 
-        _logger.LogWarning(
-            "Batch {BatchId} could not be marked completed after conflict retries. FailureCategory: {FailureCategory}",
-            request.BatchId,
-            failureCategory);
+        return new BatchResult(
+            current.BatchId,
+            BatchStatus.Completed,
+            processedResult.Payloads,
+            current.CreatedUtc,
+            processedResult.CompletedUtc ?? DateTimeOffset.UtcNow,
+            current.Etag);
+    }
+
+    private static BatchResult? BuildFailedResult(BatchResult current, string batchId, IReadOnlyList<PayloadResult> payloads)
+    {
+        if (current.Status == BatchStatus.Completed)
+        {
+            return null;
+        }
+
+        return new BatchResult(
+            batchId,
+            BatchStatus.Completed,
+            payloads,
+            current.CreatedUtc,
+            DateTimeOffset.UtcNow,
+            current.Etag);
+    }
+
+    private static IReadOnlyList<PayloadResult> CreateFailurePayloads(BatchProcessingRequest request, string failureCategory)
+    {
+        return request.Payloads
+            .Select(payload => new PayloadResult(payload.PayloadIndex, diagnostics:
+            [
+                new ExtractionDiagnostic(
+                    ServiceConstants.BatchProcessing.UnexpectedProcessingFailureCode,
+                    ServiceConstants.BatchProcessing.UnexpectedProcessingFailureMessage(failureCategory))
+            ]))
+            .ToArray();
     }
 }

@@ -8,8 +8,8 @@ namespace ProjectSift.Infrastructure.Tests;
 
 public sealed class InMemoryBatchStoreTests
 {
-    private const string BatchA = "batch-a";
-    private const string BatchB = "batch-b";
+    private static readonly string BatchA = Guid.NewGuid().ToString();
+    private static readonly string BatchB = Guid.NewGuid().ToString();
 
     [Fact]
     public async Task CreateAndRetrieve_ShouldReturnProcessingBatch()

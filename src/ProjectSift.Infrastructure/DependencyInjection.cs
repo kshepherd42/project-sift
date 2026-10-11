@@ -6,16 +6,10 @@ namespace ProjectSift.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddProjectSiftInfrastructure(
-        this IServiceCollection services,
-        Action<InMemoryBatchStoreOptions>? configure = null)
+    public static IServiceCollection AddProjectSiftInfrastructure(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var options = new InMemoryBatchStoreOptions();
-        configure?.Invoke(options);
-
-        services.AddSingleton(options);
         services.AddSingleton<InMemoryBatchDatabase>();
         services.AddSingleton<IBatchStore, InMemoryBatchStore>();
 

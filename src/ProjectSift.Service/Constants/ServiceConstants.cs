@@ -20,7 +20,6 @@ public static class ServiceConstants
 
     public static class BatchProcessing
     {
-        public const string ConfigurationSection = "BatchProcessing";
         public const string QueueFullMessage = "Batch queue is full.";
         public const string ConflictRetryExhaustedMessage = "Batch update conflicts exceeded retry limit.";
         public const string UnexpectedProcessingFailureCode = "BATCH_PROCESSING_FAILED";

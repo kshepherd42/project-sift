@@ -10,7 +10,6 @@ public static class DependencyInjection
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddTransient<BinaryJsonPayloadScanner>();
         services.AddTransient<IBatchProcessor, BatchProcessor>();
         services.AddSingleton<IHealthStatusProvider, HealthStatusProvider>();
 

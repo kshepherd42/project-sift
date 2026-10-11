@@ -12,7 +12,7 @@ namespace ProjectSift.Application.Tests;
 
 public sealed class BatchProcessorTests
 {
-    private const string BatchId = "batch-001";
+    private static readonly string BatchId = Guid.NewGuid().ToString();
 
     [Fact]
     public async Task ProcessAsync_WhenSinglePayloadContainsOneDocument_ShouldReturnCompletedBatchWithSuccessfulDocument()
@@ -229,7 +229,7 @@ public sealed class BatchProcessorTests
     }
 
     private static BatchProcessor CreateProcessor()
-        => new(new BinaryJsonPayloadScanner());
+        => new();
 
     private sealed class ThrowOnMarkerBoundaryScanner(Exception exception) : IBinaryJsonBoundaryScanner
     {

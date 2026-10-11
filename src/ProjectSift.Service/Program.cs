@@ -1,5 +1,6 @@
 using ProjectSift.Application;
 using ProjectSift.Application.Abstractions;
+using ProjectSift.Infrastructure;
 using ProjectSift.Service.BackgroundServices;
 using ProjectSift.Service.Constants;
 
@@ -16,10 +17,8 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddProjectSiftApplication();
-builder.Services.AddProjectSiftBackgroundProcessing(options =>
-{
-    builder.Configuration.GetSection(ServiceConstants.BatchProcessing.ConfigurationSection).Bind(options);
-});
+builder.Services.AddProjectSiftInfrastructure();
+builder.Services.AddProjectSiftBackgroundProcessing();
 
 var app = builder.Build();
 

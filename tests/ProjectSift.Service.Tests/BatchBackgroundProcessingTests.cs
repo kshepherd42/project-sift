@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ProjectSift.Application.Abstractions;
@@ -22,8 +21,9 @@ public sealed class BatchBackgroundProcessingTests
     [Fact]
     public async Task QueuedBatch_ShouldEventuallyReachCompleted()
     {
+        var batchId = Guid.NewGuid().ToString();
         var processor = new FakeBatchProcessor();
-        processor.SetResult("batch-complete", request =>
+        processor.SetResult(batchId, request =>
         {
             var payload = request.Payloads.Single();
             return new BatchResult(
@@ -39,10 +39,10 @@ public sealed class BatchBackgroundProcessingTests
         var store = scope.ServiceProvider.GetRequiredService<IBatchStore>();
 
         _ = await submission.QueueAsync(new BatchProcessingRequest(
-            "batch-complete",
+            batchId,
             [new PayloadInput(0, new byte[] { 0x7B, 0x7D })]));
 
-        var completed = await WaitForCompletedAsync(store, "batch-complete");
+        var completed = await WaitForCompletedAsync(store, batchId);
 
         Assert.Equal(BatchStatus.Completed, completed.Status);
         Assert.Single(completed.Payloads);
@@ -51,8 +51,9 @@ public sealed class BatchBackgroundProcessingTests
     [Fact]
     public async Task QueuedBatch_ShouldPreservePartialFailures()
     {
+        var batchId = Guid.NewGuid().ToString();
         var processor = new FakeBatchProcessor();
-        processor.SetResult("batch-partial", request =>
+        processor.SetResult(batchId, request =>
             new BatchResult(
                 request.BatchId,
                 BatchStatus.Completed,
@@ -70,9 +71,9 @@ public sealed class BatchBackgroundProcessingTests
         var submission = scope.ServiceProvider.GetRequiredService<IBatchSubmissionService>();
         var store = scope.ServiceProvider.GetRequiredService<IBatchStore>();
 
-        _ = await submission.QueueAsync(new BatchProcessingRequest("batch-partial", [new PayloadInput(2, new byte[] { 0x7B, 0x7D })]));
+        _ = await submission.QueueAsync(new BatchProcessingRequest(batchId, [new PayloadInput(2, new byte[] { 0x7B, 0x7D })]));
 
-        var completed = await WaitForCompletedAsync(store, "batch-partial");
+        var completed = await WaitForCompletedAsync(store, batchId);
         var payload = Assert.Single(completed.Payloads);
         Assert.Equal(2, payload.Documents.Count);
         Assert.Contains(payload.Documents, document => document.Status == DocumentStatus.Successful);
@@ -82,9 +83,11 @@ public sealed class BatchBackgroundProcessingTests
     [Fact]
     public async Task FailingBatch_ShouldNotBlockSubsequentBatch()
     {
+        var failedBatchId = Guid.NewGuid().ToString();
+        var nextBatchId = Guid.NewGuid().ToString();
         var processor = new FakeBatchProcessor();
-        processor.SetException("batch-fail", new InvalidOperationException("forced"));
-        processor.SetResult("batch-next", request =>
+        processor.SetException(failedBatchId, new InvalidOperationException("forced"));
+        processor.SetResult(nextBatchId, request =>
             new BatchResult(
                 request.BatchId,
                 BatchStatus.Completed,
@@ -96,11 +99,11 @@ public sealed class BatchBackgroundProcessingTests
         var submission = scope.ServiceProvider.GetRequiredService<IBatchSubmissionService>();
         var store = scope.ServiceProvider.GetRequiredService<IBatchStore>();
 
-        _ = await submission.QueueAsync(new BatchProcessingRequest("batch-fail", [new PayloadInput(0, new byte[] { 0x7B, 0x7D })]));
-        _ = await submission.QueueAsync(new BatchProcessingRequest("batch-next", [new PayloadInput(1, new byte[] { 0x7B, 0x7D })]));
+        _ = await submission.QueueAsync(new BatchProcessingRequest(failedBatchId, [new PayloadInput(0, new byte[] { 0x7B, 0x7D })]));
+        _ = await submission.QueueAsync(new BatchProcessingRequest(nextBatchId, [new PayloadInput(1, new byte[] { 0x7B, 0x7D })]));
 
-        var failed = await WaitForCompletedAsync(store, "batch-fail");
-        var next = await WaitForCompletedAsync(store, "batch-next");
+        var failed = await WaitForCompletedAsync(store, failedBatchId);
+        var next = await WaitForCompletedAsync(store, nextBatchId);
 
         var failedPayload = Assert.Single(failed.Payloads);
         var diagnostic = Assert.Single(failedPayload.Diagnostics);
@@ -111,16 +114,18 @@ public sealed class BatchBackgroundProcessingTests
     [Fact]
     public async Task QueueFull_ShouldThrowException()
     {
+        var batchId = Guid.NewGuid().ToString();
         var store = new InMemoryBatchStore(new InMemoryBatchDatabase());
         var submission = new BatchSubmissionService(store, new RejectingQueue());
 
         await Assert.ThrowsAsync<BatchQueueFullException>(() => submission.QueueAsync(
-            new BatchProcessingRequest("batch-3", [new PayloadInput(0, new byte[] { 0x7B, 0x7D })])));
+            new BatchProcessingRequest(batchId, [new PayloadInput(0, new byte[] { 0x7B, 0x7D })])));
     }
 
     [Fact]
     public async Task QueueAsync_WhenCancelled_ShouldThrowOperationCanceledException()
     {
+        var batchId = Guid.NewGuid().ToString();
         var processor = new FakeBatchProcessor();
         await using var factory = new TestFactory(processor);
         using var scope = factory.Services.CreateScope();
@@ -130,7 +135,7 @@ public sealed class BatchBackgroundProcessingTests
         cancellation.Cancel();
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => submission.QueueAsync(
-            new BatchProcessingRequest("batch-cancel", [new PayloadInput(0, new byte[] { 0x7B, 0x7D })]),
+            new BatchProcessingRequest(batchId, [new PayloadInput(0, new byte[] { 0x7B, 0x7D })]),
             cancellation.Token));
     }
 
@@ -152,18 +157,10 @@ public sealed class BatchBackgroundProcessingTests
         throw new TimeoutException($"Batch {batchId} did not complete in time.");
     }
 
-    private sealed class TestFactory(FakeBatchProcessor processor, int queueCapacity = 256) : WebApplicationFactory<Program>
+    private sealed class TestFactory(FakeBatchProcessor processor) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration(configurationBuilder =>
-            {
-                configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    [$"{ServiceConstants.BatchProcessing.ConfigurationSection}:QueueCapacity"] = queueCapacity.ToString(),
-                });
-            });
-
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IBatchProcessor>();

@@ -18,6 +18,8 @@ public sealed record PropertyPath
     {
         Value = Guard.NotNullOrWhiteSpace(value, nameof(value));
     }
+
     public string Value { get; }
+
     public override string ToString() => Value;
 }

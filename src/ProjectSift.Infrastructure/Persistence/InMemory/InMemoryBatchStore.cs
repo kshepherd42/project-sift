@@ -43,6 +43,5 @@ public sealed class InMemoryBatchStore : IBatchStore
         var result = _database.GetById(Guard.NotNullOrWhiteSpace(batchId, nameof(batchId)));
         return Task.FromResult(result);
     }
-
 }
 
