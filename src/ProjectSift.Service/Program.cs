@@ -1,14 +1,13 @@
 using ProjectSift.Application;
+using ProjectSift.Service;
 
 var builder = WebApplication.CreateBuilder(args);
 
-const string viteCorsPolicy = "ViteDevServer";
-
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(viteCorsPolicy, policy =>
+    options.AddPolicy(ServiceConstants.Cors.ViteDevServerPolicyName, policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(ServiceConstants.Cors.ViteDevServerOrigin)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -18,12 +17,15 @@ builder.Services.AddSingleton<IHealthStatusProvider, HealthStatusProvider>();
 
 var app = builder.Build();
 
-app.UseCors(viteCorsPolicy);
+app.UseCors(ServiceConstants.Cors.ViteDevServerPolicyName);
 
-app.MapGet("/api/health", (IHealthStatusProvider healthStatusProvider) =>
+app.MapGet(ServiceConstants.Routes.Health, (IHealthStatusProvider healthStatusProvider) =>
 {
     var status = healthStatusProvider.GetStatus();
-    return Results.Ok(new { status = status.Status });
+    return Results.Ok(new Dictionary<string, string>
+    {
+        [ServiceConstants.ResponseFields.Status] = status.Status
+    });
 });
 
 app.Run();
