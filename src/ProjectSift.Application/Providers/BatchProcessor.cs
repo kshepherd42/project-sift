@@ -1,6 +1,7 @@
 using ProjectSift.Application.Abstractions;
 using ProjectSift.Application.Constants;
 using ProjectSift.Application.Models;
+using ProjectSift.Domain.Exceptions;
 using ProjectSift.Domain.Enums;
 using ProjectSift.Domain.Models;
 
@@ -26,11 +27,11 @@ public sealed class BatchProcessor(BinaryJsonPayloadScanner payloadScanner) : IB
             {
                 payloadResults.Add(await _payloadScanner.ScanAsync(payload, cancellationToken));
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 throw;
             }
-            catch (Exception exception) when (IsNonFatal(exception))
+            catch (PayloadProcessingException exception)
             {
                 payloadResults.Add(CreatePayloadExceptionResult(payload.PayloadIndex, exception.GetType().Name));
             }
@@ -52,13 +53,4 @@ public sealed class BatchProcessor(BinaryJsonPayloadScanner payloadScanner) : IB
 
         return new PayloadResult(payloadIndex, diagnostics: [diagnostic]);
     }
-
-    private static bool IsNonFatal(Exception exception)
-        => exception is not (
-            OutOfMemoryException
-            or StackOverflowException
-            or AccessViolationException
-            or AppDomainUnloadedException
-            or BadImageFormatException
-            or CannotUnloadAppDomainException);
 }

@@ -2,6 +2,7 @@ using ProjectSift.Application.Abstractions;
 using ProjectSift.Application.Constants;
 using ProjectSift.Application.Enums;
 using ProjectSift.Application.Models;
+using ProjectSift.Domain.Exceptions;
 using ProjectSift.Domain.Enums;
 using ProjectSift.Domain.Models;
 
@@ -38,7 +39,7 @@ public sealed class ScannerResultFactory(BinaryJsonExtractionOptions options) : 
                 ExtractionDiagnosticCodes.CandidateIncompleteAmbiguous,
                 ExtractionMessages.CandidateIncompleteAmbiguous,
                 position),
-            _ => throw new InvalidOperationException($"{ExtractionMessages.UnexpectedBoundaryStatus}: {status}.")
+            _ => throw new PayloadProcessingException($"{ExtractionMessages.UnexpectedBoundaryStatus}: {status}.")
         };
 
     public DocumentResult CreateRecoveredResult(int documentIndex, DocumentResult extracted, int repairPosition)

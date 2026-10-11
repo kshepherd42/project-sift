@@ -4,6 +4,7 @@ using ProjectSift.Application.Constants;
 using ProjectSift.Application.Enums;
 using ProjectSift.Application.Models;
 using ProjectSift.Application.Providers;
+using ProjectSift.Domain.Exceptions;
 using ProjectSift.Domain.Enums;
 using Xunit;
 
@@ -151,10 +152,11 @@ public sealed class BatchProcessorTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => processor.ProcessAsync(request, cancellation.Token));
     }
 
-    [Fact]
-    public async Task ProcessAsync_WhenPayloadScannerThrowsUnexpectedException_ShouldRecordPayloadDiagnosticAndContinue()
+    [Theory]
+    [MemberData(nameof(HandledPayloadExceptions))]
+    public async Task ProcessAsync_WhenPayloadScannerThrowsHandledException_ShouldRecordPayloadDiagnosticAndContinue(Type exceptionType)
     {
-        var scanner = new BinaryJsonPayloadScanner(boundaryScanner: new ThrowOnMarkerBoundaryScanner());
+        var scanner = new BinaryJsonPayloadScanner(boundaryScanner: new ThrowOnMarkerBoundaryScanner(CreateException(exceptionType)));
         var processor = new BatchProcessor(scanner);
         var request = new BatchProcessingRequest(
             BatchId,
@@ -179,12 +181,60 @@ public sealed class BatchProcessorTests
         Assert.Equal(DocumentStatus.Successful, successfulDocument.Status);
     }
 
+    [Theory]
+    [MemberData(nameof(PropagatedPayloadExceptions))]
+    public async Task ProcessAsync_WhenPayloadScannerThrowsUnhandledException_ShouldPropagate(Type exceptionType)
+    {
+        var scanner = new BinaryJsonPayloadScanner(boundaryScanner: new ThrowOnMarkerBoundaryScanner(CreateException(exceptionType)));
+        var processor = new BatchProcessor(scanner);
+        var request = new BatchProcessingRequest(
+            BatchId,
+            [
+                new PayloadInput(10, new byte[] { 0xAA, (byte)'{', (byte)'"', (byte)'a', (byte)'"', (byte)':', (byte)'1', (byte)'}' }),
+                new PayloadInput(11, Encoding.UTF8.GetBytes("{\"ok\":true}"))
+            ]);
+
+        var exception = await Record.ExceptionAsync(() => processor.ProcessAsync(request));
+
+        Assert.NotNull(exception);
+        Assert.IsType(exceptionType, exception);
+    }
+
+    public static TheoryData<Type> HandledPayloadExceptions()
+        =>
+        [
+            typeof(PayloadProcessingException)
+        ];
+
+    public static TheoryData<Type> PropagatedPayloadExceptions()
+        =>
+        [
+            typeof(InvalidOperationException),
+            typeof(ArgumentException),
+            typeof(FormatException),
+            typeof(NotSupportedException),
+            typeof(NullReferenceException),
+            typeof(OverflowException)
+        ];
+
+    private static Exception CreateException(Type exceptionType)
+    {
+        if (exceptionType == typeof(PayloadProcessingException))
+        {
+            return new PayloadProcessingException("Simulated payload scanner failure.");
+        }
+
+        return Activator.CreateInstance(exceptionType, "Simulated payload scanner failure.") as Exception
+            ?? throw new InvalidOperationException($"Could not create exception instance for {exceptionType.Name}.");
+    }
+
     private static BatchProcessor CreateProcessor()
         => new(new BinaryJsonPayloadScanner());
 
-    private sealed class ThrowOnMarkerBoundaryScanner : IBinaryJsonBoundaryScanner
+    private sealed class ThrowOnMarkerBoundaryScanner(Exception exception) : IBinaryJsonBoundaryScanner
     {
         private readonly BinaryJsonBoundaryScanner _inner = new(new BinaryJsonExtractionOptions());
+        private readonly Exception _exception = exception ?? throw new ArgumentNullException(nameof(exception));
 
         public BoundaryScanResult Scan(
             byte[] content,
@@ -195,7 +245,7 @@ public sealed class BatchProcessorTests
         {
             if (content[offset] == 0xAA)
             {
-                throw new InvalidOperationException("Simulated boundary failure.");
+                throw _exception;
             }
 
             return _inner.Scan(content, offset, contentLength, startPosition, cancellationToken);
