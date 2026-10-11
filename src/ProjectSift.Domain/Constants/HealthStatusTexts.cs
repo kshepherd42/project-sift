@@ -1,4 +1,4 @@
-namespace ProjectSift.Domain;
+namespace ProjectSift.Domain.Constants;
 
 public static class HealthStatusTexts
 {

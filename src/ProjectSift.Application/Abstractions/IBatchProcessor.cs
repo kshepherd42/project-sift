@@ -1,6 +1,7 @@
-using ProjectSift.Domain;
+using ProjectSift.Application.Models;
+using ProjectSift.Domain.Models;
 
-namespace ProjectSift.Application;
+namespace ProjectSift.Application.Abstractions;
 
 public interface IBatchProcessor
 {

@@ -1,4 +1,6 @@
-namespace ProjectSift.Domain;
+using ProjectSift.Domain.Validation;
+
+namespace ProjectSift.Domain.Models;
 
 /// <summary>
 /// Represents a single extracted JSON property path.

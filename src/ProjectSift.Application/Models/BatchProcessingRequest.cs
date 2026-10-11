@@ -1,10 +1,12 @@
-namespace ProjectSift.Application;
+using ProjectSift.Domain.Validation;
+
+namespace ProjectSift.Application.Models;
 
 public sealed record BatchProcessingRequest
 {
     public BatchProcessingRequest(string batchId, IEnumerable<PayloadInput> payloads)
     {
-        BatchId = Domain.Guard.NotNullOrWhiteSpace(batchId, nameof(batchId));
+        BatchId = Guard.NotNullOrWhiteSpace(batchId, nameof(batchId));
         ArgumentNullException.ThrowIfNull(payloads);
         Payloads = payloads.ToArray();
     }

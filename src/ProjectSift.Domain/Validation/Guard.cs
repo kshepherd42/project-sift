@@ -1,4 +1,4 @@
-namespace ProjectSift.Domain;
+namespace ProjectSift.Domain.Validation;
 
 public static class Guard
 {

@@ -1,4 +1,6 @@
-namespace ProjectSift.Domain;
+using ProjectSift.Domain.Constants;
+
+namespace ProjectSift.Domain.Models;
 
 public sealed record HealthStatus(string Status)
 {

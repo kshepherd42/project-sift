@@ -1,10 +1,12 @@
-namespace ProjectSift.Application;
+using ProjectSift.Domain.Validation;
+
+namespace ProjectSift.Application.Models;
 
 public sealed record PayloadInput
 {
     public PayloadInput(int payloadIndex, ReadOnlyMemory<byte> content)
     {
-        PayloadIndex = Domain.Guard.NonNegative(payloadIndex, nameof(payloadIndex));
+        PayloadIndex = Guard.NonNegative(payloadIndex, nameof(payloadIndex));
         Content = content;
     }
     public int PayloadIndex { get; }

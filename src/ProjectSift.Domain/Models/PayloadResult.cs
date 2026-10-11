@@ -1,4 +1,6 @@
-namespace ProjectSift.Domain;
+using ProjectSift.Domain.Validation;
+
+namespace ProjectSift.Domain.Models;
 
 public sealed record PayloadResult
 {

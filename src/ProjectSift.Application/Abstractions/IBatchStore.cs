@@ -1,6 +1,6 @@
-using ProjectSift.Domain;
+using ProjectSift.Domain.Models;
 
-namespace ProjectSift.Application;
+namespace ProjectSift.Application.Abstractions;
 
 public interface IBatchStore
 {
