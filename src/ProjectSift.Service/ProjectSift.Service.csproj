@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProjectSift.Application\ProjectSift.Application.csproj" />
+    <ProjectReference Include="..\ProjectSift.Domain\ProjectSift.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
