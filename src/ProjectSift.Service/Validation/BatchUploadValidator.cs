@@ -29,32 +29,34 @@ public sealed class BatchUploadValidator(IOptions<UploadLimitsOptions> options)
 
         long totalBytes = 0;
 
-        foreach (var file in files)
+        for (var payloadIndex = 0; payloadIndex < files.Count; payloadIndex++)
         {
+            var file = files[payloadIndex];
+
             if (file is null)
             {
-                throw new UploadValidationException(ServiceMessages.InvalidFileMetadata);
+                throw new UploadValidationException(ServiceMessages.InvalidFileMetadataAt(payloadIndex));
             }
 
             if (string.IsNullOrWhiteSpace(file.Name) || string.IsNullOrWhiteSpace(file.FileName))
             {
-                throw new UploadValidationException(ServiceMessages.InvalidFileMetadata);
+                throw new UploadValidationException(ServiceMessages.InvalidFileMetadataAt(payloadIndex));
             }
 
             if (file.Length <= 0)
             {
-                throw new UploadValidationException(ServiceMessages.EmptyFile);
+                throw new UploadValidationException(ServiceMessages.EmptyFileAt(payloadIndex, file.FileName));
             }
 
             if (file.Length > _options.MaxFileBytes)
             {
-                throw new UploadValidationException(ServiceMessages.FileSizeLimitExceeded);
+                throw new UploadValidationException(ServiceMessages.FileSizeLimitExceededAt(payloadIndex, file.FileName));
             }
 
             totalBytes += file.Length;
             if (totalBytes > _options.MaxRequestBytes)
             {
-                throw new UploadValidationException(ServiceMessages.RequestSizeLimitExceeded);
+                throw new UploadValidationException(ServiceMessages.RequestSizeLimitExceededAt(payloadIndex));
             }
         }
     }

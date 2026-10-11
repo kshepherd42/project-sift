@@ -15,28 +15,18 @@ public sealed class UploadLimitsOptions
     public long MaxRequestBytes
     {
         get => _maxRequestBytes;
-        set => _maxRequestBytes = ValidatePositive(value, nameof(MaxRequestBytes));
+        set => _maxRequestBytes = Guard.Positive(value, nameof(MaxRequestBytes));
     }
 
     public long MaxFileBytes
     {
         get => _maxFileBytes;
-        set => _maxFileBytes = ValidatePositive(value, nameof(MaxFileBytes));
+        set => _maxFileBytes = Guard.Positive(value, nameof(MaxFileBytes));
     }
 
     public int MaxFileCount
     {
         get => _maxFileCount;
         set => _maxFileCount = Guard.Positive(value, nameof(MaxFileCount));
-    }
-
-    private static long ValidatePositive(long value, string paramName)
-    {
-        if (value <= 0)
-        {
-            throw new ArgumentOutOfRangeException(paramName, "Value must be positive.");
-        }
-
-        return value;
     }
 }
