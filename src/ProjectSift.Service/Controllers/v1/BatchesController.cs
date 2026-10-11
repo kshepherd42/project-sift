@@ -18,13 +18,13 @@ public sealed class BatchesController(
     IBatchSubmissionService batchSubmissionService,
     IBatchStore batchStore,
     BatchUploadValidator uploadValidator,
-    IOptions<UploadLimitsOptions> options,
+    IOptions<UploadLimitsOptions> uploadOptions,
     ILogger<BatchesController> logger) : ControllerBase
 {
     private readonly IBatchSubmissionService _batchSubmissionService = batchSubmissionService ?? throw new ArgumentNullException(nameof(batchSubmissionService));
     private readonly IBatchStore _batchStore = batchStore ?? throw new ArgumentNullException(nameof(batchStore));
     private readonly BatchUploadValidator _uploadValidator = uploadValidator ?? throw new ArgumentNullException(nameof(uploadValidator));
-    private readonly UploadLimitsOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly UploadLimitsOptions _uploadOptions = uploadOptions?.Value ?? throw new ArgumentNullException(nameof(uploadOptions));
     private readonly ILogger<BatchesController> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     [HttpPost]
@@ -70,10 +70,35 @@ public sealed class BatchesController(
 
     private async Task<PayloadInput> CreatePayloadAsync(IFormFile file, int payloadIndex, CancellationToken cancellationToken)
     {
-        await using var stream = file.OpenReadStream();
-        using var buffer = new MemoryStream((int)Math.Min(file.Length, _options.MaxFileBytes));
-        await stream.CopyToAsync(buffer, cancellationToken);
-        return new PayloadInput(payloadIndex, buffer.ToArray());
+        try
+        {
+            await using var stream = file.OpenReadStream();
+
+            var length = checked((int)file.Length);
+            var bytes = GC.AllocateUninitializedArray<byte>(length);
+
+            var readTotal = 0;
+            while (readTotal < length)
+            {
+                var bytesRead = await stream.ReadAsync(bytes.AsMemory(readTotal), cancellationToken);
+                if (bytesRead == 0)
+                {
+                    throw new UploadValidationException(ServiceMessages.FileReadFailedAt(payloadIndex, file.FileName));
+                }
+
+                readTotal += bytesRead;
+            }
+
+            return new PayloadInput(payloadIndex, bytes);
+        }
+        catch (IOException)
+        {
+            throw new UploadValidationException(ServiceMessages.FileReadFailedAt(payloadIndex, file.FileName));
+        }
+        catch (InvalidDataException)
+        {
+            throw new UploadValidationException(ServiceMessages.FileReadFailedAt(payloadIndex, file.FileName));
+        }
     }
 
     private static BatchResponse ToResponse(BatchResult result)

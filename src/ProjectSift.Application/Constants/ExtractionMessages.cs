@@ -10,6 +10,9 @@ public static class ExtractionMessages
     public const string NoCandidatesDiscovered = "No top-level JSON object or array candidate was discovered in the payload.";
     public const string UnexpectedBoundaryStatus = "Unexpected boundary status";
 
+    public static string PayloadDocumentLimitExceeded(int maxDocumentsPerPayload)
+        => $"Payload exceeded the configured document scan limit of {maxDocumentsPerPayload}.";
+
     public static string CandidateSizeLimitExceeded(int maxCandidateBytes)
         => $"Candidate exceeds the configured size limit of {maxCandidateBytes} bytes.";
 

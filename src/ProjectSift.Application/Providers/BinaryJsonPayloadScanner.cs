@@ -14,6 +14,7 @@ public sealed class BinaryJsonPayloadScanner
     private readonly IBinaryJsonBoundaryScanner _boundaryScanner;
     private readonly IDocumentExtractor _documentExtractor;
     private readonly IScannerResultFactory _scannerResultFactory;
+    private readonly BinaryJsonExtractionOptions _options;
 
     public BinaryJsonPayloadScanner(
         IDocumentExtractor? documentExtractor = null,
@@ -21,10 +22,10 @@ public sealed class BinaryJsonPayloadScanner
         IBinaryJsonBoundaryScanner? boundaryScanner = null,
         IScannerResultFactory? scannerResultFactory = null)
     {
-        var extractionOptions = options ?? new BinaryJsonExtractionOptions();
-        _documentExtractor = documentExtractor ?? new BinaryJsonDocumentExtractor(extractionOptions);
-        _boundaryScanner = boundaryScanner ?? new BinaryJsonBoundaryScanner(extractionOptions);
-        _scannerResultFactory = scannerResultFactory ?? new ScannerResultFactory(extractionOptions);
+        _options = options ?? new BinaryJsonExtractionOptions();
+        _documentExtractor = documentExtractor ?? new BinaryJsonDocumentExtractor(_options);
+        _boundaryScanner = boundaryScanner ?? new BinaryJsonBoundaryScanner(_options);
+        _scannerResultFactory = scannerResultFactory ?? new ScannerResultFactory(_options);
     }
 
     public async Task<PayloadResult> ScanAsync(PayloadInput payload, CancellationToken cancellationToken = default)
@@ -35,6 +36,7 @@ public sealed class BinaryJsonPayloadScanner
         var documents = new List<DocumentResult>();
         var payloadBuffer = ResolvePayloadBuffer(payload);
         var documentIndex = 0;
+        var reachedDocumentLimit = false;
 
         for (var position = 0; position < payloadBuffer.Length; position++)
         {
@@ -44,6 +46,12 @@ public sealed class BinaryJsonPayloadScanner
             if (!IsOpeningDelimiter(current))
             {
                 continue;
+            }
+
+            if (documentIndex >= _options.MaxDocumentsPerPayload)
+            {
+                reachedDocumentLimit = true;
+                break;
             }
 
             var boundary = _boundaryScanner.Scan(
@@ -115,7 +123,20 @@ public sealed class BinaryJsonPayloadScanner
             }
         }
 
-        return _scannerResultFactory.CreatePayloadResult(payload.PayloadIndex, documents);
+        var payloadResult = _scannerResultFactory.CreatePayloadResult(payload.PayloadIndex, documents);
+        if (!reachedDocumentLimit)
+        {
+            return payloadResult;
+        }
+
+        var diagnostic = new ExtractionDiagnostic(
+            ExtractionDiagnosticCodes.PayloadDocumentLimitExceeded,
+            ExtractionMessages.PayloadDocumentLimitExceeded(_options.MaxDocumentsPerPayload));
+
+        return new PayloadResult(
+            payload.PayloadIndex,
+            payloadResult.Documents,
+            payloadResult.Diagnostics.Concat([diagnostic]));
     }
 
     private async Task<DocumentResult> ExtractCandidateAsync(

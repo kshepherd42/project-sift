@@ -18,4 +18,7 @@ public static class ServiceMessages
 
     public static string RequestSizeLimitExceededAt(int payloadIndex)
         => $"Total upload size exceeds configured limit after payload index {payloadIndex}.";
+
+    public static string FileReadFailedAt(int payloadIndex, string fileName)
+        => $"Uploaded file at payload index {payloadIndex} ('{fileName}') could not be read completely.";
 }

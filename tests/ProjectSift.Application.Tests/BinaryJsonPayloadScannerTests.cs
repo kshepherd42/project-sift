@@ -213,6 +213,19 @@ public class BinaryJsonPayloadScannerTests
         Assert.Equal(ExtractionDiagnosticCodes.CandidatePathLimitExceeded, document.Diagnostics.Single().Code);
     }
 
+    [Fact]
+    public async Task ScanAsync_WhenDocumentLimitExceeded_ShouldStopScanningAndReturnPayloadDiagnostic()
+    {
+        var options = new BinaryJsonExtractionOptions(maxDocumentsPerPayload: 1);
+        var scanner = new BinaryJsonPayloadScanner(options: options);
+
+        var result = await scanner.ScanAsync(new PayloadInput(16, Encoding.UTF8.GetBytes("{\"a\":1}{\"b\":2}")));
+
+        Assert.Single(result.Documents);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(ExtractionDiagnosticCodes.PayloadDocumentLimitExceeded, diagnostic.Code);
+    }
+
     private static byte[] HexToBytes(string hex)
     {
         var bytes = new List<byte>();
