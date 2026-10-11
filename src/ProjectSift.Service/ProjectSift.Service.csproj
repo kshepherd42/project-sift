@@ -7,6 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.OpenApi" Version="2.4.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.1" />
     <ProjectReference Include="..\ProjectSift.Application\ProjectSift.Application.csproj" />
     <ProjectReference Include="..\ProjectSift.Domain\ProjectSift.Domain.csproj" />
     <ProjectReference Include="..\ProjectSift.Infrastructure\ProjectSift.Infrastructure.csproj" />

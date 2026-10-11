@@ -2,9 +2,27 @@ using ProjectSift.Application;
 using ProjectSift.Application.Abstractions;
 using ProjectSift.Infrastructure;
 using ProjectSift.Service.BackgroundServices;
+using ProjectSift.Service.Configuration;
 using ProjectSift.Service.Constants;
+using ProjectSift.Service.Filters;
+using ProjectSift.Service.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var uploadLimits = builder.Configuration
+    .GetSection(ServiceConstants.Configuration.UploadLimitsSectionName)
+    .Get<UploadLimitsOptions>() ?? new UploadLimitsOptions();
+
+builder.Services.Configure<UploadLimitsOptions>(builder.Configuration.GetSection(ServiceConstants.Configuration.UploadLimitsSectionName));
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = uploadLimits.MaxRequestBytes;
+});
+
+builder.Services.AddScoped<BatchUploadValidator>();
+builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddCors(options =>
 {
@@ -22,7 +40,12 @@ builder.Services.AddProjectSiftBackgroundProcessing();
 
 var app = builder.Build();
 
+app.UseSwagger();
+app.UseSwaggerUI();
+
 app.UseCors(ServiceConstants.Cors.ViteDevServerPolicyName);
+
+app.MapControllers();
 
 app.MapGet(ServiceConstants.Routes.Health, (IHealthStatusProvider healthStatusProvider) =>
 {
