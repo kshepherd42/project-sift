@@ -3,6 +3,7 @@ using ProjectSift.Application.Abstractions;
 using ProjectSift.Application.Constants;
 using ProjectSift.Application.Enums;
 using ProjectSift.Application.Models;
+using ProjectSift.Domain.Exceptions;
 using ProjectSift.Domain.Enums;
 using ProjectSift.Domain.Models;
 
@@ -110,7 +111,7 @@ public sealed class BinaryJsonPayloadScanner
                 }
 
                 default:
-                    throw new InvalidOperationException($"{ExtractionMessages.UnexpectedBoundaryStatus}: {boundary.Status}.");
+                    throw new PayloadProcessingException($"{ExtractionMessages.UnexpectedBoundaryStatus}: {boundary.Status}.");
             }
         }
 
