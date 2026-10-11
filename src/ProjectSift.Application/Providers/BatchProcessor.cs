@@ -7,9 +7,14 @@ using ProjectSift.Domain.Models;
 
 namespace ProjectSift.Application.Providers;
 
-public sealed class BatchProcessor(BinaryJsonPayloadScanner payloadScanner) : IBatchProcessor
+public sealed class BatchProcessor : IBatchProcessor
 {
-    private readonly BinaryJsonPayloadScanner _payloadScanner = payloadScanner ?? throw new ArgumentNullException(nameof(payloadScanner));
+    private readonly BinaryJsonPayloadScanner _payloadScanner;
+
+    public BatchProcessor(BinaryJsonPayloadScanner? payloadScanner = null)
+    {
+        _payloadScanner = payloadScanner ?? new BinaryJsonPayloadScanner();
+    }
 
     public async Task<BatchResult> ProcessAsync(BatchProcessingRequest request, CancellationToken cancellationToken = default)
     {

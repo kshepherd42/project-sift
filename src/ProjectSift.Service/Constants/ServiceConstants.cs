@@ -17,4 +17,14 @@ public static class ServiceConstants
     {
         public const string Status = "status";
     }
+
+    public static class BatchProcessing
+    {
+        public const string QueueFullMessage = "Batch queue is full.";
+        public const string ConflictRetryExhaustedMessage = "Batch update conflicts exceeded retry limit.";
+        public const string UnexpectedProcessingFailureCode = "BATCH_PROCESSING_FAILED";
+
+        public static string UnexpectedProcessingFailureMessage(string failureCategory)
+            => $"Batch processing failed with category: {failureCategory}.";
+    }
 }

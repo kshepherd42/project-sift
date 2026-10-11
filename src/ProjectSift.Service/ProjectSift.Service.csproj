@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ProjectSift.Application\ProjectSift.Application.csproj" />
     <ProjectReference Include="..\ProjectSift.Domain\ProjectSift.Domain.csproj" />
+    <ProjectReference Include="..\ProjectSift.Infrastructure\ProjectSift.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
