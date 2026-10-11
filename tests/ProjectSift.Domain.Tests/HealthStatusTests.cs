@@ -1,4 +1,5 @@
-using ProjectSift.Domain;
+using ProjectSift.Domain.Constants;
+using ProjectSift.Domain.Models;
 using Xunit;
 
 namespace ProjectSift.Domain.Tests;

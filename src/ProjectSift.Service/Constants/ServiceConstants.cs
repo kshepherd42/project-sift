@@ -1,4 +1,4 @@
-namespace ProjectSift.Service;
+namespace ProjectSift.Service.Constants;
 
 public static class ServiceConstants
 {

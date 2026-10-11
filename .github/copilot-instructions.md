@@ -36,3 +36,6 @@
 - For repeated validation rules, use a shared guard helper instead of duplicating inline checks (especially null/whitespace and non-negative index checks).
 - Keep grouped property declarations compact; do not insert blank lines between consecutive properties.
 - In tests, do not use `fixture.Create<string>()` for identifiers or labels. Use explicit meaningful constants/values instead.
+- Organize C# files into clear subfolders by role (for example `Models`, `Enums`, `Abstractions`, `Providers`, `Constants`, `Validation`) instead of keeping many unrelated files at the project root.
+- Align C# namespaces with folder structure (for example `ProjectSift.Domain.Models`, `ProjectSift.Application.Abstractions`, `ProjectSift.Service.Constants`) and update dependent `using` statements in the same change.
+- When relocating files, preserve Git history visibility by performing explicit file moves (rename/move) rather than delete-and-recreate patterns where possible.

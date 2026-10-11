@@ -1,6 +1,7 @@
-using ProjectSift.Domain;
+using ProjectSift.Application.Abstractions;
+using ProjectSift.Domain.Models;
 
-namespace ProjectSift.Application;
+namespace ProjectSift.Application.Providers;
 
 public sealed class HealthStatusProvider : IHealthStatusProvider
 {

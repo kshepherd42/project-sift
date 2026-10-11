@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
-using ProjectSift.Domain;
-using ProjectSift.Service;
+using ProjectSift.Domain.Constants;
+using ProjectSift.Service.Constants;
 using Xunit;
 
 namespace ProjectSift.Service.Tests;

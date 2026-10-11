@@ -1,5 +1,6 @@
-using ProjectSift.Application;
-using ProjectSift.Service;
+using ProjectSift.Application.Abstractions;
+using ProjectSift.Application.Providers;
+using ProjectSift.Service.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
 
