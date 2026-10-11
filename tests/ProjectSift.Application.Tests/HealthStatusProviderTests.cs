@@ -1,3 +1,4 @@
+using ProjectSift.Domain;
 using ProjectSift.Application;
 using Xunit;
 
@@ -12,6 +13,6 @@ public class HealthStatusProviderTests
 
         var result = provider.GetStatus();
 
-        Assert.Equal("Healthy", result.Status);
+        Assert.Equal(HealthStatusTexts.Healthy, result.Status);
     }
 }

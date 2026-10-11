@@ -9,25 +9,15 @@ public sealed record DocumentResult
         IEnumerable<PropertyPath>? propertyPaths = null,
         IEnumerable<ExtractionDiagnostic>? diagnostics = null)
     {
-        if (documentIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(documentIndex), "Document index cannot be negative.");
-        }
-
-        DocumentIndex = documentIndex;
+        DocumentIndex = Guard.NonNegative(documentIndex, nameof(documentIndex));
         Type = type;
         Status = status;
         PropertyPaths = propertyPaths?.ToArray() ?? [];
         Diagnostics = diagnostics?.ToArray() ?? [];
     }
-
     public int DocumentIndex { get; }
-
     public DocumentType Type { get; }
-
     public DocumentStatus Status { get; }
-
     public IReadOnlyList<PropertyPath> PropertyPaths { get; }
-
     public IReadOnlyList<ExtractionDiagnostic> Diagnostics { get; }
 }

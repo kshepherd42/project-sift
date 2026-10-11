@@ -33,3 +33,6 @@
 - In C# services/providers/classes, prefer primary constructors when they improve readability and fit the current style.
 - Validate constructor and method arguments for null at boundaries (for example with `ArgumentNullException.ThrowIfNull(...)`).
 - Avoid magic strings in backend code; introduce project-local constants classes as needed (for example endpoint routes, policy names, status text keys).
+- For repeated validation rules, use a shared guard helper instead of duplicating inline checks (especially null/whitespace and non-negative index checks).
+- Keep grouped property declarations compact; do not insert blank lines between consecutive properties.
+- In tests, do not use `fixture.Create<string>()` for identifiers or labels. Use explicit meaningful constants/values instead.

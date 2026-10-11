@@ -7,19 +7,11 @@ public sealed record PayloadResult
         IEnumerable<DocumentResult>? documents = null,
         IEnumerable<ExtractionDiagnostic>? diagnostics = null)
     {
-        if (payloadIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(payloadIndex), "Payload index cannot be negative.");
-        }
-
-        PayloadIndex = payloadIndex;
+        PayloadIndex = Guard.NonNegative(payloadIndex, nameof(payloadIndex));
         Documents = documents?.ToArray() ?? [];
         Diagnostics = diagnostics?.ToArray() ?? [];
     }
-
     public int PayloadIndex { get; }
-
     public IReadOnlyList<DocumentResult> Documents { get; }
-
     public IReadOnlyList<ExtractionDiagnostic> Diagnostics { get; }
 }

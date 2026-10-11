@@ -8,6 +8,6 @@ public class HealthStatusTests
     [Fact]
     public void Healthy_ShouldHaveExpectedStatusText()
     {
-        Assert.Equal("Healthy", HealthStatus.Healthy.Status);
+        Assert.Equal(HealthStatusTexts.Healthy, HealthStatus.Healthy.Status);
     }
 }

@@ -1,4 +1,3 @@
-using AutoFixture;
 using ProjectSift.Domain;
 using Xunit;
 
@@ -6,12 +5,9 @@ namespace ProjectSift.Domain.Tests;
 
 public class BatchContractsTests
 {
-    private readonly Fixture _fixture = new();
-
     [Fact]
     public void BatchResult_ShouldConstructWithValidValues()
     {
-        var batchId = _fixture.Create<string>();
         var payload = new PayloadResult(0, [
             new DocumentResult(0, DocumentType.Object, DocumentStatus.Successful, [
                 new PropertyPath("id"),
@@ -19,9 +15,9 @@ public class BatchContractsTests
             ])
         ]);
 
-        var result = new BatchResult(batchId, BatchStatus.Processing, [payload]);
+        var result = new BatchResult(DomainTestConstants.BatchId, BatchStatus.Processing, [payload]);
 
-        Assert.Equal(batchId, result.BatchId);
+        Assert.Equal(DomainTestConstants.BatchId, result.BatchId);
         Assert.Equal(BatchStatus.Processing, result.Status);
         Assert.Single(result.Payloads);
     }
@@ -96,13 +92,13 @@ public class BatchContractsTests
     [Fact]
     public void PayloadResult_ShouldAllowPayloadLevelDiagnosticsWhenNoDocumentIsDiscovered()
     {
-        var diagnostic = new ExtractionDiagnostic("PAYLOAD_NO_DOCUMENT", "No document boundaries discovered.");
+        var diagnostic = new ExtractionDiagnostic(DomainTestConstants.PayloadNoDocumentCode, "No document boundaries discovered.");
 
         var payload = new PayloadResult(2, diagnostics: [diagnostic]);
 
         Assert.Empty(payload.Documents);
         Assert.Single(payload.Diagnostics);
-        Assert.Equal("PAYLOAD_NO_DOCUMENT", payload.Diagnostics[0].Code);
+        Assert.Equal(DomainTestConstants.PayloadNoDocumentCode, payload.Diagnostics[0].Code);
     }
 
     [Theory]

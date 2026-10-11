@@ -14,15 +14,8 @@ public sealed record PropertyPath
 {
     public PropertyPath(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new ArgumentException("Property path cannot be null, empty, or whitespace.", nameof(value));
-        }
-
-        Value = value;
+        Value = Guard.NotNullOrWhiteSpace(value, nameof(value));
     }
-
     public string Value { get; }
-
     public override string ToString() => Value;
 }
