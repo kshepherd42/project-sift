@@ -33,9 +33,16 @@
 - In C# services/providers/classes, prefer primary constructors when they improve readability and fit the current style.
 - Validate constructor and method arguments for null at boundaries (for example with `ArgumentNullException.ThrowIfNull(...)`).
 - Avoid magic strings in backend code; introduce project-local constants classes as needed (for example endpoint routes, policy names, status text keys).
-- For repeated validation rules, use a shared guard helper instead of duplicating inline checks (especially null/whitespace and non-negative index checks).
+- For repeated validation rules, use a shared guard helper instead of duplicating inline checks (especially null/whitespace, non-negative index, and positive numeric checks).
+- Prefer `Guard` APIs over manual `if (...) throw ...` validation when an equivalent guard already exists.
+- In extraction/scanning code, keep diagnostic/error messages centralized in constants/message helpers rather than inline string literals in providers.
+- Keep `using` directives clean: remove unused `using`s and keep remaining `using`s alphabetized with `System.*` first, then project/other namespaces.
+- Prefer intent-revealing private helper methods to break up long methods and complex switch/branch logic.
+- Favor descriptive method names over explanatory comments; keep comments only for non-obvious invariants or protocol constraints that names alone cannot communicate.
+- Keep classes focused on a single responsibility. When a provider starts owning boundary scanning, result construction, formatting, and orchestration together, split those concerns into dedicated collaborators (for example scanners, collectors, and factories).
 - Keep grouped property declarations compact; do not insert blank lines between consecutive properties.
 - In tests, do not use `fixture.Create<string>()` for identifiers or labels. Use explicit meaningful constants/values instead.
 - Organize C# files into clear subfolders by role (for example `Models`, `Enums`, `Abstractions`, `Providers`, `Constants`, `Validation`) instead of keeping many unrelated files at the project root.
+- Put each C# enum in its own file under an `Enums` folder; avoid nested enums inside non-test classes.
 - Align C# namespaces with folder structure (for example `ProjectSift.Domain.Models`, `ProjectSift.Application.Abstractions`, `ProjectSift.Service.Constants`) and update dependent `using` statements in the same change.
 - When relocating files, preserve Git history visibility by performing explicit file moves (rename/move) rather than delete-and-recreate patterns where possible.

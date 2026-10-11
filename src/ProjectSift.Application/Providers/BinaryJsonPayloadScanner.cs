@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using ProjectSift.Application.Abstractions;
 using ProjectSift.Application.Constants;
+using ProjectSift.Application.Enums;
 using ProjectSift.Application.Models;
 using ProjectSift.Domain.Enums;
 using ProjectSift.Domain.Models;
@@ -8,179 +10,185 @@ namespace ProjectSift.Application.Providers;
 
 public sealed class BinaryJsonPayloadScanner
 {
+    private readonly IBinaryJsonBoundaryScanner _boundaryScanner;
     private readonly IDocumentExtractor _documentExtractor;
-    private readonly BinaryJsonExtractionOptions _options;
+    private readonly IScannerResultFactory _scannerResultFactory;
 
-    public BinaryJsonPayloadScanner(IDocumentExtractor? documentExtractor = null, BinaryJsonExtractionOptions? options = null)
+    public BinaryJsonPayloadScanner(
+        IDocumentExtractor? documentExtractor = null,
+        BinaryJsonExtractionOptions? options = null,
+        IBinaryJsonBoundaryScanner? boundaryScanner = null,
+        IScannerResultFactory? scannerResultFactory = null)
     {
-        _options = options ?? new BinaryJsonExtractionOptions();
-        _documentExtractor = documentExtractor ?? new BinaryJsonDocumentExtractor(_options);
+        var extractionOptions = options ?? new BinaryJsonExtractionOptions();
+        _documentExtractor = documentExtractor ?? new BinaryJsonDocumentExtractor(extractionOptions);
+        _boundaryScanner = boundaryScanner ?? new BinaryJsonBoundaryScanner(extractionOptions);
+        _scannerResultFactory = scannerResultFactory ?? new ScannerResultFactory(extractionOptions);
     }
 
     public async Task<PayloadResult> ScanAsync(PayloadInput payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var documents = new List<DocumentResult>();
-        var content = payload.Content.ToArray();
+        var payloadBuffer = ResolvePayloadBuffer(payload);
         var documentIndex = 0;
 
-        for (var position = 0; position < content.Length; position++)
+        for (var position = 0; position < payloadBuffer.Length; position++)
         {
-            var current = content[position];
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var current = GetByteAt(payloadBuffer, position);
             if (!IsOpeningDelimiter(current))
             {
                 continue;
             }
 
-            var boundary = ScanBoundary(content, position);
+            var boundary = _boundaryScanner.Scan(
+                payloadBuffer.Content,
+                payloadBuffer.Offset,
+                payloadBuffer.Length,
+                position,
+                cancellationToken);
+
             switch (boundary.Status)
             {
                 case BoundaryScanStatus.Complete:
                 {
-                    var candidateLength = boundary.EndPosition - position + 1;
-                    var candidateMemory = new ReadOnlyMemory<byte>(content, position, candidateLength);
-                    var candidate = new DocumentCandidate(payload.PayloadIndex, documentIndex, candidateMemory);
-                    var result = await SafeExtractAsync(candidate, position, cancellationToken);
-                    documents.Add(result);
-                    documentIndex++;
+                    var completeResult = await ExtractCandidateAsync(
+                        payload,
+                        payloadBuffer,
+                        position,
+                        boundary.EndPosition,
+                        documentIndex,
+                        cancellationToken);
 
-                    // Deterministic resynchronization rule:
-                    // - successful candidate: consume the full boundary to avoid nested duplicate discovery
-                    // - failed candidate: continue scanning within the same range so inner independent candidates
-                    //   can still be discovered when binary framing introduces false-positive outer boundaries
-                    if (result.Status is not DocumentStatus.Failed)
+                    documents.Add(completeResult);
+                    if (ShouldAdvanceToBoundaryEnd(completeResult.Status))
                     {
                         position = boundary.EndPosition;
                     }
 
+                    documentIndex++;
                     break;
                 }
 
                 case BoundaryScanStatus.RecoverableIncomplete:
                 {
-                    var originalLength = content.Length - position;
-                    var repaired = new byte[originalLength + boundary.RecoveryClosers.Count];
-                    Array.Copy(content, position, repaired, 0, originalLength);
-
-                    for (var closerIndex = 0; closerIndex < boundary.RecoveryClosers.Count; closerIndex++)
-                    {
-                        repaired[originalLength + closerIndex] = boundary.RecoveryClosers[closerIndex];
-                    }
-
-                    var candidate = new DocumentCandidate(payload.PayloadIndex, documentIndex, repaired);
-                    var extracted = await SafeExtractAsync(candidate, position, cancellationToken);
-                    var repairedDiagnostic = new ExtractionDiagnostic(
-                        ExtractionDiagnosticCodes.CandidateIncompleteRecovered,
-                        "Candidate ended at payload boundary and was deterministically repaired by appending missing closing delimiters.",
-                        content.Length - 1);
-
-                    var recoveredStatus = extracted.Status is DocumentStatus.Successful
-                        ? DocumentStatus.Recovered
-                        : extracted.Status;
-
-                    var recoveredDiagnostics = extracted.Diagnostics.Concat([repairedDiagnostic]);
-                    documents.Add(new DocumentResult(
+                    var recovered = await ExtractRecoveredCandidateAsync(
+                        payload,
+                        payloadBuffer,
+                        boundary,
+                        position,
                         documentIndex,
-                        extracted.Type,
-                        recoveredStatus,
-                        extracted.PropertyPaths,
-                        recoveredDiagnostics));
+                        cancellationToken);
+
+                    documents.Add(recovered);
+                    if (ShouldTerminateAfterRecovery(recovered.Status))
+                    {
+                        position = payloadBuffer.Length;
+                    }
 
                     documentIndex++;
-
-                    if (recoveredStatus is not DocumentStatus.Failed)
-                    {
-                        position = content.Length;
-                    }
-
                     break;
                 }
 
                 case BoundaryScanStatus.TooDeep:
-                {
-                    var diagnostic = new ExtractionDiagnostic(
-                        ExtractionDiagnosticCodes.CandidateDepthLimitExceeded,
-                        $"Candidate exceeded the configured nesting limit of {_options.MaxNestingDepth}.",
-                        boundary.ErrorPosition);
-
-                    documents.Add(new DocumentResult(
-                        documentIndex,
-                        current == (byte)'{' ? DocumentType.Object : DocumentType.Array,
-                        DocumentStatus.Failed,
-                        diagnostics: [diagnostic]));
-
-                    documentIndex++;
-                    break;
-                }
-
                 case BoundaryScanStatus.TooLarge:
-                {
-                    var diagnostic = new ExtractionDiagnostic(
-                        ExtractionDiagnosticCodes.CandidateTooLarge,
-                        $"Candidate exceeded the configured size limit of {_options.MaxCandidateBytes} bytes.",
-                        boundary.ErrorPosition);
-
-                    documents.Add(new DocumentResult(
-                        documentIndex,
-                        current == (byte)'{' ? DocumentType.Object : DocumentType.Array,
-                        DocumentStatus.Failed,
-                        diagnostics: [diagnostic]));
-
-                    documentIndex++;
-                    break;
-                }
-
                 case BoundaryScanStatus.MismatchedBoundary:
-                {
-                    var diagnostic = new ExtractionDiagnostic(
-                        ExtractionDiagnosticCodes.CandidateBoundaryMismatch,
-                        "Candidate contains mismatched JSON delimiters.",
-                        boundary.ErrorPosition);
-
-                    documents.Add(new DocumentResult(
-                        documentIndex,
-                        current == (byte)'{' ? DocumentType.Object : DocumentType.Array,
-                        DocumentStatus.Failed,
-                        diagnostics: [diagnostic]));
-
-                    documentIndex++;
-                    break;
-                }
-
                 case BoundaryScanStatus.AmbiguousIncomplete:
                 {
-                    var diagnostic = new ExtractionDiagnostic(
-                        ExtractionDiagnosticCodes.CandidateIncompleteAmbiguous,
-                        "Candidate ended in an ambiguous state (for example inside a JSON string) and was not repaired.",
-                        content.Length == 0 ? null : content.Length - 1);
-
-                    documents.Add(new DocumentResult(
-                        documentIndex,
-                        current == (byte)'{' ? DocumentType.Object : DocumentType.Array,
-                        DocumentStatus.Failed,
-                        diagnostics: [diagnostic]));
-
+                    documents.Add(CreateBoundaryFailure(current, boundary, documentIndex, payloadBuffer.Length));
                     documentIndex++;
-                    position = content.Length;
+                    if (boundary.Status is BoundaryScanStatus.AmbiguousIncomplete)
+                    {
+                        position = payloadBuffer.Length;
+                    }
+
                     break;
                 }
 
                 default:
-                    throw new InvalidOperationException($"Unexpected boundary status: {boundary.Status}.");
+                    throw new InvalidOperationException($"{ExtractionMessages.UnexpectedBoundaryStatus}: {boundary.Status}.");
             }
         }
 
-        var payloadDiagnostics = documents.Count == 0
-            ? new[]
-            {
-                new ExtractionDiagnostic(
-                    ExtractionDiagnosticCodes.NoCandidatesDiscovered,
-                    "No top-level JSON object or array candidate was discovered in the payload.")
-            }
-            : Array.Empty<ExtractionDiagnostic>();
+        return _scannerResultFactory.CreatePayloadResult(payload.PayloadIndex, documents);
+    }
 
-        return new PayloadResult(payload.PayloadIndex, documents, payloadDiagnostics);
+    private async Task<DocumentResult> ExtractCandidateAsync(
+        PayloadInput payload,
+        PayloadBuffer payloadBuffer,
+        int position,
+        int endPosition,
+        int documentIndex,
+        CancellationToken cancellationToken)
+    {
+        var candidateLength = endPosition - position + 1;
+        var candidateMemory = SlicePayload(payloadBuffer, position, candidateLength);
+        var candidate = new DocumentCandidate(payload.PayloadIndex, documentIndex, candidateMemory);
+        return await SafeExtractAsync(candidate, position, cancellationToken);
+    }
+
+    private async Task<DocumentResult> ExtractRecoveredCandidateAsync(
+        PayloadInput payload,
+        PayloadBuffer payloadBuffer,
+        BoundaryScanResult boundary,
+        int position,
+        int documentIndex,
+        CancellationToken cancellationToken)
+    {
+        var repairedCandidate = CreateRecoveredCandidate(payloadBuffer, position, boundary.RecoveryClosers);
+        var candidate = new DocumentCandidate(payload.PayloadIndex, documentIndex, repairedCandidate);
+        var extracted = await SafeExtractAsync(candidate, position, cancellationToken);
+        return _scannerResultFactory.CreateRecoveredResult(documentIndex, extracted, payloadBuffer.Length - 1);
+    }
+
+    private static bool ShouldAdvanceToBoundaryEnd(DocumentStatus status)
+        => status is not DocumentStatus.Failed;
+
+    private static bool ShouldTerminateAfterRecovery(DocumentStatus status)
+        => status is not DocumentStatus.Failed;
+
+    private static PayloadBuffer ResolvePayloadBuffer(PayloadInput payload)
+    {
+        if (MemoryMarshal.TryGetArray(payload.Content, out var segment) && segment.Array is not null)
+        {
+            return new PayloadBuffer(segment.Array, segment.Offset, payload.Content.Length);
+        }
+
+        var copied = payload.Content.ToArray();
+        return new PayloadBuffer(copied, 0, copied.Length);
+    }
+
+    private static byte GetByteAt(PayloadBuffer payloadBuffer, int relativePosition)
+        => payloadBuffer.Content[payloadBuffer.Offset + relativePosition];
+
+    private static ReadOnlyMemory<byte> SlicePayload(PayloadBuffer payloadBuffer, int start, int length)
+        => new(payloadBuffer.Content, payloadBuffer.Offset + start, length);
+
+    private static byte[] CreateRecoveredCandidate(PayloadBuffer payloadBuffer, int position, IReadOnlyList<byte> recoveryClosers)
+    {
+        var originalLength = payloadBuffer.Length - position;
+        var repaired = new byte[originalLength + recoveryClosers.Count];
+        Array.Copy(payloadBuffer.Content, payloadBuffer.Offset + position, repaired, 0, originalLength);
+
+        for (var closerIndex = 0; closerIndex < recoveryClosers.Count; closerIndex++)
+        {
+            repaired[originalLength + closerIndex] = recoveryClosers[closerIndex];
+        }
+
+        return repaired;
+    }
+
+    private DocumentResult CreateBoundaryFailure(byte openingDelimiter, BoundaryScanResult boundary, int documentIndex, int payloadLength)
+    {
+        var position = boundary.Status is BoundaryScanStatus.AmbiguousIncomplete
+            ? payloadLength == 0 ? null : payloadLength - 1
+            : boundary.ErrorPosition;
+
+        return _scannerResultFactory.CreateBoundaryFailure(documentIndex, openingDelimiter, boundary.Status, position);
     }
 
     private async Task<DocumentResult> SafeExtractAsync(DocumentCandidate candidate, int candidateStartPosition, CancellationToken cancellationToken)
@@ -189,151 +197,20 @@ public sealed class BinaryJsonPayloadScanner
         {
             return await _documentExtractor.ExtractAsync(candidate, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
-            var extractionDiagnostic = new ExtractionDiagnostic(
-                ExtractionDiagnosticCodes.CandidateExtractionException,
-                $"Candidate extraction failed with an unexpected exception: {exception.GetType().Name}.",
-                candidateStartPosition);
-
-            return new DocumentResult(
+            return _scannerResultFactory.CreateExtractionExceptionFailure(
                 candidate.DocumentIndex,
-                DocumentType.Unknown,
-                DocumentStatus.Failed,
-                diagnostics: [extractionDiagnostic]);
+                candidateStartPosition,
+                exception.GetType().Name);
         }
-    }
-
-    private BoundaryScanResult ScanBoundary(ReadOnlySpan<byte> content, int startPosition)
-    {
-        Span<byte> delimiters = stackalloc byte[_options.MaxNestingDepth];
-        var depth = 0;
-        var insideString = false;
-        var escaped = false;
-
-        for (var position = startPosition; position < content.Length; position++)
-        {
-            var current = content[position];
-
-            if ((position - startPosition + 1) > _options.MaxCandidateBytes)
-            {
-                return BoundaryScanResult.TooLarge(position);
-            }
-
-            if (insideString)
-            {
-                if (escaped)
-                {
-                    escaped = false;
-                    continue;
-                }
-
-                if (current == (byte)'\\')
-                {
-                    escaped = true;
-                    continue;
-                }
-
-                if (current == (byte)'"')
-                {
-                    insideString = false;
-                }
-
-                continue;
-            }
-
-            if (current == (byte)'"')
-            {
-                insideString = true;
-                continue;
-            }
-
-            if (current is (byte)'{' or (byte)'[')
-            {
-                if (depth == _options.MaxNestingDepth)
-                {
-                    return BoundaryScanResult.TooDeep(position);
-                }
-
-                delimiters[depth] = current;
-                depth++;
-                continue;
-            }
-
-            if (current is (byte)'}' or (byte)']')
-            {
-                if (depth == 0)
-                {
-                    return BoundaryScanResult.Mismatched(position);
-                }
-
-                var open = delimiters[depth - 1];
-                if (!IsMatchingDelimiter(open, current))
-                {
-                    return BoundaryScanResult.Mismatched(position);
-                }
-
-                depth--;
-                if (depth == 0)
-                {
-                    return BoundaryScanResult.Complete(position);
-                }
-            }
-        }
-
-        if (depth == 0)
-        {
-            return BoundaryScanResult.Ambiguous();
-        }
-
-        if (insideString || escaped)
-        {
-            return BoundaryScanResult.Ambiguous();
-        }
-
-        var recoveryClosers = new List<byte>(depth);
-        for (var index = depth - 1; index >= 0; index--)
-        {
-            recoveryClosers.Add(delimiters[index] == (byte)'{' ? (byte)'}' : (byte)']');
-        }
-
-        return BoundaryScanResult.Recoverable(recoveryClosers);
     }
 
     private static bool IsOpeningDelimiter(byte value) => value is (byte)'{' or (byte)'[';
 
-    private static bool IsMatchingDelimiter(byte open, byte close)
-        => (open == (byte)'{' && close == (byte)'}')
-        || (open == (byte)'[' && close == (byte)']');
-
-    private enum BoundaryScanStatus
-    {
-        Complete,
-        RecoverableIncomplete,
-        AmbiguousIncomplete,
-        MismatchedBoundary,
-        TooDeep,
-        TooLarge
-    }
-
-    private sealed record BoundaryScanResult(BoundaryScanStatus Status, int EndPosition, int? ErrorPosition, IReadOnlyList<byte> RecoveryClosers)
-    {
-        public static BoundaryScanResult Complete(int endPosition)
-            => new(BoundaryScanStatus.Complete, endPosition, null, []);
-
-        public static BoundaryScanResult Recoverable(IReadOnlyList<byte> recoveryClosers)
-            => new(BoundaryScanStatus.RecoverableIncomplete, -1, null, recoveryClosers);
-
-        public static BoundaryScanResult Ambiguous()
-            => new(BoundaryScanStatus.AmbiguousIncomplete, -1, null, []);
-
-        public static BoundaryScanResult Mismatched(int position)
-            => new(BoundaryScanStatus.MismatchedBoundary, -1, position, []);
-
-        public static BoundaryScanResult TooDeep(int position)
-            => new(BoundaryScanStatus.TooDeep, -1, position, []);
-
-        public static BoundaryScanResult TooLarge(int position)
-            => new(BoundaryScanStatus.TooLarge, -1, position, []);
-    }
+    private readonly record struct PayloadBuffer(byte[] Content, int Offset, int Length);
 }

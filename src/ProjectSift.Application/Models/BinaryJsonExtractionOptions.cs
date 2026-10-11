@@ -13,24 +13,9 @@ public sealed record BinaryJsonExtractionOptions
         int maxNestingDepth = DefaultMaxNestingDepth,
         int maxPathsPerDocument = DefaultMaxPathsPerDocument)
     {
-        if (maxCandidateBytes <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxCandidateBytes), "Value must be positive.");
-        }
-
-        if (maxNestingDepth <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxNestingDepth), "Value must be positive.");
-        }
-
-        if (maxPathsPerDocument <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxPathsPerDocument), "Value must be positive.");
-        }
-
-        MaxCandidateBytes = maxCandidateBytes;
-        MaxNestingDepth = maxNestingDepth;
-        MaxPathsPerDocument = maxPathsPerDocument;
+        MaxCandidateBytes = Guard.Positive(maxCandidateBytes, nameof(maxCandidateBytes));
+        MaxNestingDepth = Guard.Positive(maxNestingDepth, nameof(maxNestingDepth));
+        MaxPathsPerDocument = Guard.Positive(maxPathsPerDocument, nameof(maxPathsPerDocument));
     }
 
     public int MaxCandidateBytes { get; }

@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using ProjectSift.Application.Abstractions;
 using ProjectSift.Application.Constants;
@@ -8,170 +7,145 @@ using ProjectSift.Domain.Models;
 
 namespace ProjectSift.Application.Providers;
 
-public sealed class BinaryJsonDocumentExtractor(BinaryJsonExtractionOptions? options = null) : IDocumentExtractor
+public sealed class BinaryJsonDocumentExtractor : IDocumentExtractor
 {
-    private readonly BinaryJsonExtractionOptions _options = options ?? new BinaryJsonExtractionOptions();
+    private readonly BinaryJsonExtractionOptions _options;
+    private readonly IPropertyPathCollector _propertyPathCollector;
+
+    public BinaryJsonDocumentExtractor(BinaryJsonExtractionOptions? options = null, IPropertyPathCollector? propertyPathCollector = null)
+    {
+        _options = options ?? new BinaryJsonExtractionOptions();
+        _propertyPathCollector = propertyPathCollector ?? new JsonPropertyPathCollector(_options, new PropertyPathFormatter());
+    }
 
     public Task<DocumentResult> ExtractAsync(DocumentCandidate candidate, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(candidate);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (candidate.Content.IsEmpty)
+        if (TryCreateEarlyFailureResult(candidate, out var earlyFailure))
         {
-            var emptyDiagnostic = new ExtractionDiagnostic(
-                ExtractionDiagnosticCodes.CandidateEmpty,
-                "Candidate content is empty.",
-                0);
-
-            return Task.FromResult(new DocumentResult(
-                candidate.DocumentIndex,
-                DocumentType.Unknown,
-                DocumentStatus.Failed,
-                diagnostics: [emptyDiagnostic]));
-        }
-
-        if (candidate.Content.Length > _options.MaxCandidateBytes)
-        {
-            var sizeDiagnostic = new ExtractionDiagnostic(
-                ExtractionDiagnosticCodes.CandidateTooLarge,
-                $"Candidate exceeds the configured size limit of {_options.MaxCandidateBytes} bytes.",
-                0);
-
-            return Task.FromResult(new DocumentResult(
-                candidate.DocumentIndex,
-                InferDocumentType(candidate.Content.Span),
-                DocumentStatus.Failed,
-                diagnostics: [sizeDiagnostic]));
+            return Task.FromResult(earlyFailure);
         }
 
         try
         {
-            using var document = JsonDocument.Parse(candidate.Content, new JsonDocumentOptions
-            {
-                MaxDepth = _options.MaxNestingDepth
-            });
-
-            var rootType = ToDocumentType(document.RootElement.ValueKind);
-            if (rootType is DocumentType.Unknown)
-            {
-                var unsupportedRoot = new ExtractionDiagnostic(
-                    ExtractionDiagnosticCodes.CandidateUnsupportedRoot,
-                    "Candidate root is neither a JSON object nor array.");
-
-                return Task.FromResult(new DocumentResult(
-                    candidate.DocumentIndex,
-                    DocumentType.Unknown,
-                    DocumentStatus.Failed,
-                    diagnostics: [unsupportedRoot]));
-            }
-
-            var paths = new HashSet<string>(StringComparer.Ordinal);
-            if (!CollectPaths(document.RootElement, string.Empty, 0, paths))
-            {
-                var pathLimitDiagnostic = new ExtractionDiagnostic(
-                    ExtractionDiagnosticCodes.CandidatePathLimitExceeded,
-                    $"Candidate exceeded the configured path limit of {_options.MaxPathsPerDocument}.");
-
-                return Task.FromResult(new DocumentResult(
-                    candidate.DocumentIndex,
-                    rootType,
-                    DocumentStatus.Failed,
-                    diagnostics: [pathLimitDiagnostic]));
-            }
-
-            var orderedPaths = paths
-                .OrderBy(path => path, StringComparer.Ordinal)
-                .Select(path => new PropertyPath(path))
-                .ToArray();
-
-            return Task.FromResult(new DocumentResult(
-                candidate.DocumentIndex,
-                rootType,
-                DocumentStatus.Successful,
-                orderedPaths));
+            using var document = ParseCandidateDocument(candidate.Content);
+            return Task.FromResult(ExtractFromParsedDocument(candidate, document.RootElement, cancellationToken));
         }
         catch (JsonException jsonException)
         {
-            var invalidJson = new ExtractionDiagnostic(
-                ExtractionDiagnosticCodes.CandidateInvalidJson,
-                "Candidate is not valid JSON.",
-                jsonException.BytePositionInLine >= 0 && jsonException.BytePositionInLine <= int.MaxValue
-                    ? (int)jsonException.BytePositionInLine
-                    : null);
-
-            return Task.FromResult(new DocumentResult(
-                candidate.DocumentIndex,
-                InferDocumentType(candidate.Content.Span),
-                DocumentStatus.Failed,
-                diagnostics: [invalidJson]));
+            return Task.FromResult(CreateInvalidJsonFailureResult(candidate, jsonException));
         }
     }
 
-    private bool CollectPaths(JsonElement node, string currentPath, int depth, HashSet<string> paths)
+    private bool TryCreateEarlyFailureResult(DocumentCandidate candidate, out DocumentResult result)
     {
-        if (depth > _options.MaxNestingDepth)
+        if (candidate.Content.IsEmpty)
         {
-            return false;
+            result = CreateFailedResult(
+                candidate.DocumentIndex,
+                DocumentType.Unknown,
+                ExtractionDiagnosticCodes.CandidateEmpty,
+                ExtractionMessages.CandidateContentEmpty,
+                0);
+
+            return true;
         }
 
-        switch (node.ValueKind)
+        if (candidate.Content.Length > _options.MaxCandidateBytes)
         {
-            case JsonValueKind.Object:
-                foreach (var property in node.EnumerateObject())
-                {
-                    var propertyPath = AppendPropertySegment(currentPath, property.Name);
-                    if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-                    {
-                        if (!CollectPaths(property.Value, propertyPath, depth + 1, paths))
-                        {
-                            return false;
-                        }
+            result = CreateFailedResult(
+                candidate.DocumentIndex,
+                InferDocumentType(candidate.Content.Span),
+                ExtractionDiagnosticCodes.CandidateTooLarge,
+                ExtractionMessages.CandidateSizeLimitExceeded(_options.MaxCandidateBytes),
+                0);
 
-                        continue;
-                    }
-
-                    paths.Add(propertyPath);
-                    if (paths.Count > _options.MaxPathsPerDocument)
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-
-            case JsonValueKind.Array:
-                var arrayPath = AppendArraySegment(currentPath);
-                paths.Add(arrayPath);
-                if (paths.Count > _options.MaxPathsPerDocument)
-                {
-                    return false;
-                }
-
-                foreach (var item in node.EnumerateArray())
-                {
-                    if (item.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-                    {
-                        if (!CollectPaths(item, arrayPath, depth + 1, paths))
-                        {
-                            return false;
-                        }
-                    }
-                }
-
-                return true;
-
-            default:
-                if (!string.IsNullOrEmpty(currentPath))
-                {
-                    paths.Add(currentPath);
-                    if (paths.Count > _options.MaxPathsPerDocument)
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
+            return true;
         }
+
+        result = null!;
+        return false;
+    }
+
+    private JsonDocument ParseCandidateDocument(ReadOnlyMemory<byte> content)
+        => JsonDocument.Parse(content, new JsonDocumentOptions
+        {
+            MaxDepth = _options.MaxNestingDepth
+        });
+
+    private DocumentResult ExtractFromParsedDocument(
+        DocumentCandidate candidate,
+        JsonElement root,
+        CancellationToken cancellationToken)
+    {
+        var rootType = ToDocumentType(root.ValueKind);
+        if (rootType is DocumentType.Unknown)
+        {
+            return CreateFailedResult(
+                candidate.DocumentIndex,
+                DocumentType.Unknown,
+                ExtractionDiagnosticCodes.CandidateUnsupportedRoot,
+                ExtractionMessages.CandidateUnsupportedRoot,
+                null);
+        }
+
+        var collectionResult = _propertyPathCollector.Collect(root, cancellationToken);
+        if (!collectionResult.Succeeded)
+        {
+            return CreateFailedResult(
+                candidate.DocumentIndex,
+                rootType,
+                ExtractionDiagnosticCodes.CandidatePathLimitExceeded,
+                ExtractionMessages.CandidatePathLimitExceeded(_options.MaxPathsPerDocument),
+                null);
+        }
+
+        return CreateSuccessfulResult(candidate.DocumentIndex, rootType, collectionResult.Paths);
+    }
+
+    private static DocumentResult CreateSuccessfulResult(int documentIndex, DocumentType rootType, IReadOnlyCollection<string> paths)
+    {
+        var orderedPaths = paths
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .Select(path => new PropertyPath(path))
+            .ToArray();
+
+        return new DocumentResult(
+            documentIndex,
+            rootType,
+            DocumentStatus.Successful,
+            orderedPaths);
+    }
+
+    private static DocumentResult CreateFailedResult(
+        int documentIndex,
+        DocumentType type,
+        string diagnosticCode,
+        string diagnosticMessage,
+        int? position)
+    {
+        var diagnostic = new ExtractionDiagnostic(diagnosticCode, diagnosticMessage, position);
+        return new DocumentResult(
+            documentIndex,
+            type,
+            DocumentStatus.Failed,
+            diagnostics: [diagnostic]);
+    }
+
+    private static DocumentResult CreateInvalidJsonFailureResult(DocumentCandidate candidate, JsonException jsonException)
+    {
+        int? position = jsonException.BytePositionInLine >= 0 && jsonException.BytePositionInLine <= int.MaxValue
+            ? (int)jsonException.BytePositionInLine
+            : null;
+
+        return CreateFailedResult(
+            candidate.DocumentIndex,
+            InferDocumentType(candidate.Content.Span),
+            ExtractionDiagnosticCodes.CandidateInvalidJson,
+            ExtractionMessages.CandidateInvalidJson,
+            position);
     }
 
     private static DocumentType InferDocumentType(ReadOnlySpan<byte> content)
@@ -201,68 +175,4 @@ public sealed class BinaryJsonDocumentExtractor(BinaryJsonExtractionOptions? opt
         _ => DocumentType.Unknown
     };
 
-    private static string AppendPropertySegment(string parentPath, string segment)
-    {
-        var escaped = IsSimplePropertyName(segment)
-            ? segment
-            : ToBracketQuotedSegment(segment);
-
-        if (string.IsNullOrEmpty(parentPath))
-        {
-            return escaped;
-        }
-
-        if (escaped.StartsWith("[", StringComparison.Ordinal))
-        {
-            return string.Concat(parentPath, escaped);
-        }
-
-        return string.Concat(parentPath, ".", escaped);
-    }
-
-    private static string AppendArraySegment(string parentPath) => string.IsNullOrEmpty(parentPath)
-        ? "[]"
-        : string.Concat(parentPath, "[]");
-
-    private static bool IsSimplePropertyName(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-        {
-            return false;
-        }
-
-        if (!(char.IsLetter(name[0]) || name[0] == '_'))
-        {
-            return false;
-        }
-
-        foreach (var character in name)
-        {
-            if (!(char.IsLetterOrDigit(character) || character == '_'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static string ToBracketQuotedSegment(string name)
-    {
-        var builder = new StringBuilder(name.Length + 4);
-        builder.Append("['");
-
-        foreach (var character in name)
-        {
-            if (character is '\\' or '\'')
-            {
-                builder.Append('\\');
-            }
-
-            builder.Append(character);
-        }
-
-        builder.Append("']");
-        return builder.ToString();
-    }
 }
