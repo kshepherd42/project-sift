@@ -1,0 +1,15 @@
+{
+  "name": "projectsift",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup:dev": "dotnet restore ProjectSift.sln && npm ci && npm ci --prefix web && npm run dev",
+    "dev": "concurrently -k --names API,WEB --prefix-colors cyan,magenta \"dotnet run --project src/ProjectSift.Service/ProjectSift.Service.csproj --urls http://localhost:5050\" \"npm run dev --prefix web\"",
+    "test:backend": "dotnet test ProjectSift.sln",
+    "test:frontend": "npm run test --prefix web",
+    "build:frontend": "npm run build --prefix web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
