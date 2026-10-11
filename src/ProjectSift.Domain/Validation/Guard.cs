@@ -46,4 +46,14 @@ public static class Guard
 
         return value;
     }
+
+    public static long NonNegative(long value, string paramName)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(paramName, NegativeValueMessage);
+        }
+
+        return value;
+    }
 }

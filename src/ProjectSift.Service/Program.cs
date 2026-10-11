@@ -1,5 +1,6 @@
+using ProjectSift.Application;
 using ProjectSift.Application.Abstractions;
-using ProjectSift.Application.Providers;
+using ProjectSift.Service.BackgroundServices;
 using ProjectSift.Service.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,7 +15,11 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddSingleton<IHealthStatusProvider, HealthStatusProvider>();
+builder.Services.AddProjectSiftApplication();
+builder.Services.AddProjectSiftBackgroundProcessing(options =>
+{
+    builder.Configuration.GetSection(ServiceConstants.BatchProcessing.ConfigurationSection).Bind(options);
+});
 
 var app = builder.Build();
 
