@@ -1,5 +1,7 @@
 using ProjectSift.Application;
 using ProjectSift.Application.Abstractions;
+using ProjectSift.Application.Models;
+using ProjectSift.Application.Providers;
 using ProjectSift.Infrastructure;
 using ProjectSift.Service.BackgroundServices;
 using ProjectSift.Service.Configuration;
@@ -14,10 +16,33 @@ var uploadLimits = builder.Configuration
     .Get<UploadLimitsOptions>() ?? new UploadLimitsOptions();
 
 builder.Services.Configure<UploadLimitsOptions>(builder.Configuration.GetSection(ServiceConstants.Configuration.UploadLimitsSectionName));
+builder.Services.Configure<BackgroundProcessingOptions>(builder.Configuration.GetSection(ServiceConstants.Configuration.BackgroundProcessingSectionName));
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = uploadLimits.MaxRequestBytes;
 });
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(_ =>
+{
+    var section = builder.Configuration.GetSection(ServiceConstants.Configuration.ExtractionSectionName);
+
+    var maxCandidateBytes = section.GetValue<int?>(nameof(BinaryJsonExtractionOptions.MaxCandidateBytes))
+        ?? BinaryJsonExtractionOptions.DefaultMaxCandidateBytes;
+    var maxNestingDepth = section.GetValue<int?>(nameof(BinaryJsonExtractionOptions.MaxNestingDepth))
+        ?? BinaryJsonExtractionOptions.DefaultMaxNestingDepth;
+    var maxPathsPerDocument = section.GetValue<int?>(nameof(BinaryJsonExtractionOptions.MaxPathsPerDocument))
+        ?? BinaryJsonExtractionOptions.DefaultMaxPathsPerDocument;
+    var maxDocumentsPerPayload = section.GetValue<int?>(nameof(BinaryJsonExtractionOptions.MaxDocumentsPerPayload))
+        ?? BinaryJsonExtractionOptions.DefaultMaxDocumentsPerPayload;
+
+    return new BinaryJsonExtractionOptions(
+        maxCandidateBytes,
+        maxNestingDepth,
+        maxPathsPerDocument,
+        maxDocumentsPerPayload);
+});
+builder.Services.AddTransient<BinaryJsonPayloadScanner>();
 
 builder.Services.AddScoped<BatchUploadValidator>();
 builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());

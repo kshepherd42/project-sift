@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using ProjectSift.Application.Abstractions;
 using ProjectSift.Application.Models;
 using ProjectSift.Domain.Abstractions.Infrastructure;
@@ -116,7 +117,7 @@ public sealed class BatchBackgroundProcessingTests
     {
         var batchId = Guid.NewGuid().ToString();
         var store = new InMemoryBatchStore(new InMemoryBatchDatabase());
-        var submission = new BatchSubmissionService(store, new RejectingQueue());
+        var submission = new BatchSubmissionService(store, new RejectingQueue(), NullLogger<BatchSubmissionService>.Instance);
 
         await Assert.ThrowsAsync<BatchQueueFullException>(() => submission.QueueAsync(
             new BatchProcessingRequest(batchId, [new PayloadInput(0, new byte[] { 0x7B, 0x7D })])));
@@ -137,6 +138,32 @@ public sealed class BatchBackgroundProcessingTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => submission.QueueAsync(
             new BatchProcessingRequest(batchId, [new PayloadInput(0, new byte[] { 0x7B, 0x7D })]),
             cancellation.Token));
+    }
+
+    [Fact]
+    public async Task QueueAsync_WhenCancelledDuringEnqueue_ShouldMarkBatchCompletedWithCancellationDiagnostic()
+    {
+        var batchId = Guid.NewGuid().ToString();
+        var store = new InMemoryBatchStore(new InMemoryBatchDatabase());
+        var submission = new BatchSubmissionService(store, new BlockingQueue(), NullLogger<BatchSubmissionService>.Instance);
+        using var cancellation = new CancellationTokenSource();
+        var payloadBytes = new byte[] { 0x7B, 0x7D };
+
+        var queueTask = submission.QueueAsync(
+            new BatchProcessingRequest(batchId, [new PayloadInput(0, payloadBytes)]),
+            cancellation.Token);
+
+        cancellation.CancelAfter(50);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queueTask);
+
+        var persisted = await store.GetByIdAsync(batchId);
+        Assert.NotNull(persisted);
+        Assert.Equal(BatchStatus.Completed, persisted.Status);
+
+        var payload = Assert.Single(persisted.Payloads);
+        var diagnostic = Assert.Single(payload.Diagnostics);
+        Assert.Equal(ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode, diagnostic.Code);
+        Assert.True(payloadBytes.All(value => value == 0));
     }
 
     private static async Task<BatchResult> WaitForCompletedAsync(IBatchStore store, string batchId)
@@ -216,5 +243,18 @@ public sealed class BatchBackgroundProcessingTests
             await Task.CompletedTask;
             yield break;
         }
+    }
+
+    private sealed class BlockingQueue : IBatchWorkQueue
+    {
+        public async ValueTask<bool> TryEnqueueAsync(BatchProcessingRequest request, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return false;
+        }
+
+        public IAsyncEnumerable<BatchProcessingRequest> ReadAllAsync(CancellationToken cancellationToken)
+            => AsyncEnumerable.Empty<BatchProcessingRequest>();
     }
 }

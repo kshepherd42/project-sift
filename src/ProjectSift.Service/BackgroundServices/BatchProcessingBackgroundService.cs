@@ -13,6 +13,7 @@ public sealed class BatchProcessingBackgroundService(
     IBatchWorkQueue queue,
     IBatchProcessor batchProcessor,
     IBatchStore batchStore,
+    TimeProvider timeProvider,
     ILogger<BatchProcessingBackgroundService> logger) : BackgroundService
 {
     private const int MaxConflictRetries = 3;
@@ -20,6 +21,7 @@ public sealed class BatchProcessingBackgroundService(
     private readonly IBatchWorkQueue _queue = queue ?? throw new ArgumentNullException(nameof(queue));
     private readonly IBatchProcessor _batchProcessor = batchProcessor ?? throw new ArgumentNullException(nameof(batchProcessor));
     private readonly IBatchStore _batchStore = batchStore ?? throw new ArgumentNullException(nameof(batchStore));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly ILogger<BatchProcessingBackgroundService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -32,30 +34,83 @@ public sealed class BatchProcessingBackgroundService(
 
     private async Task ProcessQueuedBatchAsync(BatchProcessingRequest request, CancellationToken cancellationToken)
     {
+        var startedUtc = _timeProvider.GetUtcNow();
+
         try
         {
             var processed = await _batchProcessor.ProcessAsync(request, cancellationToken);
             await PersistCompletedBatchAsync(request.BatchId, processed, cancellationToken);
+
+            _logger.LogInformation(
+                "Batch processing completed. BatchId: {BatchId}. PayloadCount: {PayloadCount}. ProcessingDurationMs: {ProcessingDurationMs}",
+                request.BatchId,
+                request.Payloads.Count,
+                Math.Max(0, (_timeProvider.GetUtcNow() - startedUtc).TotalMilliseconds));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            await PersistCanceledBatchBestEffortAsync(request);
+
+            _logger.LogInformation(
+                "Batch processing cancelled. BatchId: {BatchId}. FailureCategory: {FailureCategory}. DiagnosticCode: {DiagnosticCode}. ProcessingDurationMs: {ProcessingDurationMs}",
+                request.BatchId,
+                nameof(OperationCanceledException),
+                ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode,
+                Math.Max(0, (_timeProvider.GetUtcNow() - startedUtc).TotalMilliseconds));
+
             throw;
         }
         catch (PayloadProcessingException exception)
         {
             await PersistFailedBatchAsync(request, exception.GetType().Name, cancellationToken);
             _logger.LogWarning(exception,
-                "Batch processing handled payload failure for batch {BatchId}. FailureCategory: {FailureCategory}",
+                "Batch processing handled payload failure for batch {BatchId}. FailureCategory: {FailureCategory}. DiagnosticCode: {DiagnosticCode}. ProcessingDurationMs: {ProcessingDurationMs}",
                 request.BatchId,
-                exception.GetType().Name);
+                exception.GetType().Name,
+                ServiceConstants.BatchProcessing.UnexpectedProcessingFailureCode,
+                Math.Max(0, (_timeProvider.GetUtcNow() - startedUtc).TotalMilliseconds));
         }
         catch (Exception exception)
         {
             await PersistFailedBatchAsync(request, exception.GetType().Name, cancellationToken);
             _logger.LogError(exception,
-                "Batch processing failed for batch {BatchId}. FailureCategory: {FailureCategory}",
+                "Batch processing failed for batch {BatchId}. FailureCategory: {FailureCategory}. DiagnosticCode: {DiagnosticCode}. ProcessingDurationMs: {ProcessingDurationMs}",
                 request.BatchId,
-                exception.GetType().Name);
+                exception.GetType().Name,
+                ServiceConstants.BatchProcessing.UnexpectedProcessingFailureCode,
+                Math.Max(0, (_timeProvider.GetUtcNow() - startedUtc).TotalMilliseconds));
+        }
+        finally
+        {
+            PayloadMemoryReleaser.ClearPayloadBuffers(request.Payloads);
+        }
+    }
+
+    private async Task PersistCanceledBatchBestEffortAsync(BatchProcessingRequest request)
+    {
+        var diagnosticsPayloads = CreateCanceledPayloads(request, nameof(OperationCanceledException));
+
+        try
+        {
+            await PersistWithRetriesAsync(
+                request.BatchId,
+                current => BuildFailedResult(current, request.BatchId, diagnosticsPayloads),
+                onMissing: static () => { },
+                onRetryExhausted: () => _logger.LogWarning(
+                    "Cancelled batch {BatchId} could not be marked completed after conflict retries. FailureCategory: {FailureCategory}. DiagnosticCode: {DiagnosticCode}",
+                    request.BatchId,
+                    nameof(OperationCanceledException),
+                    ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode),
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Cancelled batch {BatchId} could not be persisted. FailureCategory: {FailureCategory}. DiagnosticCode: {DiagnosticCode}",
+                request.BatchId,
+                exception.GetType().Name,
+                ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode);
         }
     }
 
@@ -161,7 +216,19 @@ public sealed class BatchProcessingBackgroundService(
                 new ExtractionDiagnostic(
                     ServiceConstants.BatchProcessing.UnexpectedProcessingFailureCode,
                     ServiceConstants.BatchProcessing.UnexpectedProcessingFailureMessage(failureCategory))
-            ]))
+            ], payloadName: payload.PayloadName))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<PayloadResult> CreateCanceledPayloads(BatchProcessingRequest request, string failureCategory)
+    {
+        return request.Payloads
+            .Select(payload => new PayloadResult(payload.PayloadIndex, diagnostics:
+            [
+                new ExtractionDiagnostic(
+                    ServiceConstants.BatchProcessing.ProcessingCancelledDiagnosticCode,
+                    ServiceConstants.BatchProcessing.ProcessingCancelledMessage(failureCategory))
+            ], payloadName: payload.PayloadName))
             .ToArray();
     }
 }

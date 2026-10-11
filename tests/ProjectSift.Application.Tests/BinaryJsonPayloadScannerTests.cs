@@ -158,8 +158,23 @@ public class BinaryJsonPayloadScannerTests
 
         var document = Assert.Single(result.Documents);
         Assert.Equal(DocumentStatus.Recovered, document.Status);
+        Assert.Equal("root", document.DocumentName);
         Assert.Equal("root.id", document.PropertyPaths.Single().Value);
         Assert.Contains(document.Diagnostics, diagnostic => diagnostic.Code == ExtractionDiagnosticCodes.CandidateIncompleteRecovered);
+    }
+
+    [Fact]
+    public async Task ScanAsync_WhenRecoveredCandidateStillInvalid_ShouldNotAddRecoveredDiagnostic()
+    {
+        var scanner = new BinaryJsonPayloadScanner();
+
+        var result = await scanner.ScanAsync(new PayloadInput(17, Encoding.UTF8.GetBytes("{}{\"broken\":")));
+
+        Assert.Equal(2, result.Documents.Count);
+        var failedDocument = result.Documents[1];
+        Assert.Equal(DocumentStatus.Failed, failedDocument.Status);
+        Assert.Contains(failedDocument.Diagnostics, diagnostic => diagnostic.Code == ExtractionDiagnosticCodes.CandidateInvalidJson);
+        Assert.DoesNotContain(failedDocument.Diagnostics, diagnostic => diagnostic.Code == ExtractionDiagnosticCodes.CandidateIncompleteRecovered);
     }
 
     [Fact]
@@ -211,6 +226,19 @@ public class BinaryJsonPayloadScannerTests
         var document = Assert.Single(result.Documents);
         Assert.Equal(DocumentStatus.Failed, document.Status);
         Assert.Equal(ExtractionDiagnosticCodes.CandidatePathLimitExceeded, document.Diagnostics.Single().Code);
+    }
+
+    [Fact]
+    public async Task ScanAsync_WhenDocumentLimitExceeded_ShouldStopScanningAndReturnPayloadDiagnostic()
+    {
+        var options = new BinaryJsonExtractionOptions(maxDocumentsPerPayload: 1);
+        var scanner = new BinaryJsonPayloadScanner(options: options);
+
+        var result = await scanner.ScanAsync(new PayloadInput(16, Encoding.UTF8.GetBytes("{\"a\":1}{\"b\":2}")));
+
+        Assert.Single(result.Documents);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(ExtractionDiagnosticCodes.PayloadDocumentLimitExceeded, diagnostic.Code);
     }
 
     private static byte[] HexToBytes(string hex)

@@ -3,6 +3,7 @@ namespace ProjectSift.Application.Constants;
 public static class ExtractionDiagnosticCodes
 {
     public const string NoCandidatesDiscovered = "NO_CANDIDATES_DISCOVERED";
+    public const string PayloadDocumentLimitExceeded = "PAYLOAD_DOCUMENT_LIMIT_EXCEEDED";
     public const string CandidateTooLarge = "CANDIDATE_TOO_LARGE";
     public const string CandidateDepthLimitExceeded = "CANDIDATE_DEPTH_LIMIT_EXCEEDED";
     public const string CandidateBoundaryMismatch = "CANDIDATE_BOUNDARY_MISMATCH";

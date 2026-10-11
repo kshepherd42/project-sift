@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using ProjectSift.Service.Configuration;
 
 namespace ProjectSift.Service.BackgroundServices;
 
@@ -8,8 +10,11 @@ public static class BackgroundProcessingDependencyInjection
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var queueCapacity = 256;
-        services.AddSingleton<IBatchWorkQueue>(_ => new BoundedBatchWorkQueue(queueCapacity));
+        services.AddSingleton<IBatchWorkQueue>(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<BackgroundProcessingOptions>>().Value;
+            return new BoundedBatchWorkQueue(options.QueueCapacity);
+        });
         services.AddSingleton<IBatchSubmissionService, BatchSubmissionService>();
         services.AddHostedService<BatchProcessingBackgroundService>();
 

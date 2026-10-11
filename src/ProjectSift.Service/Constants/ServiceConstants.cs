@@ -5,6 +5,8 @@ public static class ServiceConstants
     public static class Configuration
     {
         public const string UploadLimitsSectionName = "UploadLimits";
+        public const string ExtractionSectionName = "Extraction";
+        public const string BackgroundProcessingSectionName = "BackgroundProcessing";
     }
 
     public static class Cors
@@ -36,10 +38,14 @@ public static class ServiceConstants
     {
         public const string QueueFullMessage = "Batch queue is full.";
         public const string QueueRejectedDiagnosticCode = "BATCH_QUEUE_REJECTED";
+        public const string ProcessingCancelledDiagnosticCode = "BATCH_PROCESSING_CANCELLED";
         public const string ConflictRetryExhaustedMessage = "Batch update conflicts exceeded retry limit.";
         public const string UnexpectedProcessingFailureCode = "BATCH_PROCESSING_FAILED";
 
         public static string UnexpectedProcessingFailureMessage(string failureCategory)
             => $"Batch processing failed with category: {failureCategory}.";
+
+        public static string ProcessingCancelledMessage(string failureCategory)
+            => $"Batch processing was cancelled with category: {failureCategory}.";
     }
 }

@@ -44,21 +44,23 @@ public sealed class ScannerResultFactory(BinaryJsonExtractionOptions options) : 
 
     public DocumentResult CreateRecoveredResult(int documentIndex, DocumentResult extracted, int repairPosition)
     {
+        if (extracted.Status is not DocumentStatus.Successful)
+        {
+            return extracted;
+        }
+
         var repairedDiagnostic = new ExtractionDiagnostic(
             ExtractionDiagnosticCodes.CandidateIncompleteRecovered,
             ExtractionMessages.CandidateIncompleteRecovered(),
             repairPosition);
 
-        var recoveredStatus = extracted.Status is DocumentStatus.Successful
-            ? DocumentStatus.Recovered
-            : extracted.Status;
-
         return new DocumentResult(
             documentIndex,
             extracted.Type,
-            recoveredStatus,
+            DocumentStatus.Recovered,
             extracted.PropertyPaths,
-            extracted.Diagnostics.Concat([repairedDiagnostic]));
+            extracted.Diagnostics.Concat([repairedDiagnostic]),
+            extracted.DocumentName);
     }
 
     public DocumentResult CreateExtractionExceptionFailure(int documentIndex, int candidateStartPosition, string exceptionType)
@@ -75,7 +77,7 @@ public sealed class ScannerResultFactory(BinaryJsonExtractionOptions options) : 
             diagnostics: [diagnostic]);
     }
 
-    public PayloadResult CreatePayloadResult(int payloadIndex, IReadOnlyCollection<DocumentResult> documents)
+    public PayloadResult CreatePayloadResult(int payloadIndex, IReadOnlyCollection<DocumentResult> documents, string? payloadName = null)
     {
         var payloadDiagnostics = documents.Count == 0
             ? new[]
@@ -86,7 +88,7 @@ public sealed class ScannerResultFactory(BinaryJsonExtractionOptions options) : 
             }
             : Array.Empty<ExtractionDiagnostic>();
 
-        return new PayloadResult(payloadIndex, documents, payloadDiagnostics);
+        return new PayloadResult(payloadIndex, documents, payloadDiagnostics, payloadName);
     }
 
     private static DocumentResult CreateFailedDocumentResult(

@@ -49,6 +49,25 @@ public sealed class BatchApiIntegrationTests
         Assert.Equal(2, completed.Payloads.Count);
         Assert.Contains(completed.Payloads, payload => payload.PayloadIndex == 0);
         Assert.Contains(completed.Payloads, payload => payload.PayloadIndex == 1);
+        Assert.Contains(completed.Payloads, payload => payload.PayloadName == "first.json");
+        Assert.Contains(completed.Payloads, payload => payload.PayloadName == "second.json");
+    }
+
+    [Fact]
+    public async Task UploadingNamedObject_ShouldIncludePayloadAndDocumentNamesInResult()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        using var content = CreateMultipart(("first.bin", "{\"order\":{\"id\":1}}"));
+        var accepted = await PostAcceptedAsync(client, content);
+        var completed = await WaitForBatchCompletedAsync(client, accepted.BatchId);
+
+        var payload = Assert.Single(completed.Payloads);
+        Assert.Equal("first.bin", payload.PayloadName);
+
+        var document = Assert.Single(payload.Documents);
+        Assert.Equal("order", document.DocumentName);
     }
 
     [Fact]
@@ -128,6 +147,27 @@ public sealed class BatchApiIntegrationTests
         emptyFileCollection.Add(new ByteArrayContent([]), "files", "empty.json");
         var emptyResponse = await client.PostAsync(ServiceConstants.Routes.BatchesV1, emptyFileCollection);
         Assert.Equal(HttpStatusCode.BadRequest, emptyResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task InvalidUpload_ShouldReturnAllFileValidationIssues()
+    {
+        await using var factory = new UploadLimitTestFactory();
+        using var client = factory.CreateClient();
+
+        using var mixedInvalid = new MultipartFormDataContent();
+        mixedInvalid.Add(new ByteArrayContent([]), "files", "empty.json");
+        mixedInvalid.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("123456789")), "files", "big.json");
+
+        var response = await client.PostAsync(ServiceConstants.Routes.BatchesV1, mixedInvalid);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
+        Assert.NotNull(error);
+        Assert.Equal(ServiceConstants.ErrorCodes.InvalidUpload, error.Code);
+        Assert.NotNull(error.Details);
+        Assert.Contains(error.Details!, detail => detail.Contains("empty.json", StringComparison.Ordinal));
+        Assert.Contains(error.Details!, detail => detail.Contains("big.json", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -320,9 +360,10 @@ public sealed class BatchApiIntegrationTests
     }
 
     private sealed record BatchAcceptedResponse(string BatchId, string ResourceUrl);
-    private sealed record ApiErrorResponse(string Code, string Message, string? BatchId);
+    private sealed record ApiErrorResponse(string Code, string Message, string? BatchId, IReadOnlyList<string>? Details = null);
     private sealed record BatchResponse(string BatchId, BatchStatus Status, IReadOnlyList<PayloadResponse> Payloads);
-    private sealed record PayloadResponse(int PayloadIndex, IReadOnlyList<DocumentResponse> Documents);
-    private sealed record DocumentResponse(DocumentStatus Status, IReadOnlyList<DiagnosticResponse> Diagnostics);
+    private sealed record PayloadResponse(int PayloadIndex, string? PayloadName, IReadOnlyList<DocumentResponse> Documents, IReadOnlyList<DiagnosticResponse> Diagnostics);
+    private sealed record DocumentResponse(int DocumentIndex, string? DocumentName, DocumentType Type, DocumentStatus Status, IReadOnlyList<PropertyPathResponse> PropertyPaths, IReadOnlyList<DiagnosticResponse> Diagnostics);
+    private sealed record PropertyPathResponse(string Value);
     private sealed record DiagnosticResponse(string Code, string Message, int? Position);
 }

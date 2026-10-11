@@ -107,16 +107,68 @@ public sealed class BinaryJsonDocumentExtractor : IDocumentExtractor
 
     private static DocumentResult CreateSuccessfulResult(int documentIndex, DocumentType rootType, IReadOnlyCollection<string> paths)
     {
-        var orderedPaths = paths
+        var orderedPathValues = paths
             .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        var orderedPaths = orderedPathValues
             .Select(path => new PropertyPath(path))
             .ToArray();
+
+        var documentName = TryInferDocumentName(rootType, orderedPathValues);
 
         return new DocumentResult(
             documentIndex,
             rootType,
             DocumentStatus.Successful,
-            orderedPaths);
+            orderedPaths,
+            documentName: documentName);
+    }
+
+    private static string? TryInferDocumentName(DocumentType rootType, IReadOnlyList<string> orderedPathValues)
+    {
+        if (rootType is not DocumentType.Object)
+        {
+            return null;
+        }
+
+        var uniqueTopLevelNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in orderedPathValues)
+        {
+            var topLevelName = ExtractTopLevelName(path);
+            if (topLevelName is null)
+            {
+                continue;
+            }
+
+            uniqueTopLevelNames.Add(topLevelName);
+            if (uniqueTopLevelNames.Count > 1)
+            {
+                return null;
+            }
+        }
+
+        return uniqueTopLevelNames.Count == 1
+            ? uniqueTopLevelNames.First()
+            : null;
+    }
+
+    private static string? ExtractTopLevelName(string path)
+    {
+        if (string.IsNullOrEmpty(path) || path[0] == '[')
+        {
+            return null;
+        }
+
+        var delimiterIndex = path.IndexOfAny(['.', '[']);
+        if (delimiterIndex < 0)
+        {
+            return path;
+        }
+
+        return delimiterIndex == 0
+            ? null
+            : path[..delimiterIndex];
     }
 
     private static DocumentResult CreateFailedResult(

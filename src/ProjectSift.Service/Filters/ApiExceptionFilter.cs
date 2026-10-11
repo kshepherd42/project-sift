@@ -19,7 +19,11 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
         {
             case UploadValidationException exception:
                 _logger.LogInformation(exception, "Upload request rejected.");
-                context.Result = BuildResult(StatusCodes.Status400BadRequest, ServiceConstants.ErrorCodes.InvalidUpload, exception.Message);
+                context.Result = BuildResult(
+                    StatusCodes.Status400BadRequest,
+                    ServiceConstants.ErrorCodes.InvalidUpload,
+                    exception.Message,
+                    details: exception.Issues);
                 context.ExceptionHandled = true;
                 break;
 
@@ -42,9 +46,14 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
         }
     }
 
-    private static ObjectResult BuildResult(int statusCode, string code, string message, string? batchId = null)
+    private static ObjectResult BuildResult(
+        int statusCode,
+        string code,
+        string message,
+        string? batchId = null,
+        IReadOnlyList<string>? details = null)
     {
-        return new ObjectResult(new ApiErrorResponse(code, message, batchId))
+        return new ObjectResult(new ApiErrorResponse(code, message, batchId, details))
         {
             StatusCode = statusCode
         };
