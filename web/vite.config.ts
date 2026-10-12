@@ -8,7 +8,8 @@ export default defineConfig({
     strictPort: true,
   },
   test: {
+    include: ['src/tests/unit/**/*.test.{ts,tsx}'],
     environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
+    setupFiles: './src/tests/setup/vitest.setup.ts',
   },
 });

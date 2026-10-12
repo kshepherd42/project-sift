@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { useTheme } from '../hooks/useTheme';
-import type { AppRoute } from '../hooks/useHashRoute';
+import type { AppRoute, NavigableRoute } from '../features/routes/useHashRoute';
 import { Button } from './Button';
 
 type AppShellProps = {
   currentRoute: AppRoute;
-  onNavigate: (route: AppRoute) => void;
+  onNavigate: (route: NavigableRoute) => void;
   children: ReactNode;
 };
 
@@ -37,6 +37,8 @@ function NavLink({
 
 export function AppShell({ currentRoute, onNavigate, children }: AppShellProps) {
   const { theme, toggleTheme } = useTheme();
+  const currentSectionLabel =
+    currentRoute === 'dashboard' ? 'Dashboard' : currentRoute === 'upload' ? 'Upload' : 'Batch details';
 
   return (
     <div className="app-shell">
@@ -61,8 +63,8 @@ export function AppShell({ currentRoute, onNavigate, children }: AppShellProps) 
       <div className="content-shell">
         <header className="topbar">
           <div>
-            <p className="topbar-label">Stage 2 Foundation</p>
-            <strong>{currentRoute === 'dashboard' ? 'Dashboard' : 'Upload (Placeholder)'}</strong>
+            <p className="topbar-label">Stage 3 Workflow</p>
+            <strong>{currentSectionLabel}</strong>
           </div>
           <Button variant="secondary" onClick={toggleTheme} aria-label="Toggle dark mode">
             {theme === 'light' ? 'Dark mode' : 'Light mode'}

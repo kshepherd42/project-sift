@@ -1,14 +1,18 @@
 import { AppShell } from './components/AppShell';
-import { DashboardPage } from './features/dashboard/DashboardPage';
-import { UploadPlaceholderPage } from './features/upload/UploadPlaceholderPage';
-import { useHashRoute } from './hooks/useHashRoute';
+import { AppRouteContent } from './features/routes/AppRouteContent';
+import { useHashRoute } from './features/routes/useHashRoute';
 
 function App() {
-  const { route, navigate } = useHashRoute();
+  const { route, batchId, navigate, navigateToBatchDetails } = useHashRoute();
 
   return (
     <AppShell currentRoute={route} onNavigate={navigate}>
-      {route === 'upload' ? <UploadPlaceholderPage /> : <DashboardPage onNavigate={navigate} />}
+      <AppRouteContent
+        route={route}
+        batchId={batchId}
+        onNavigate={navigate}
+        onNavigateToBatchDetails={navigateToBatchDetails}
+      />
     </AppShell>
   );
 }
