@@ -45,6 +45,10 @@ async function flushMicrotasks() {
   });
 }
 
+function createAbortError() {
+  return new DOMException('The operation was aborted.', 'AbortError');
+}
+
 describe('BatchDetailsPage', () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -149,5 +153,40 @@ describe('BatchDetailsPage', () => {
 
     expect(screen.getByText('Taking longer than expected')).toBeInTheDocument();
     expect(screen.getByText(/still processing/i)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Batch processing is taking longer than expected.');
+  });
+
+  it('ignores aborted stale requests after batch navigation changes', async () => {
+    vi.useFakeTimers();
+
+    vi.mocked(fetchBatchDetails)
+      .mockImplementationOnce(
+        (_batchId, signal) =>
+          new Promise((_, reject) => {
+            signal?.addEventListener('abort', () => reject(createAbortError()), { once: true });
+          }),
+      )
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        data: createBatch({ batchId: 'batch-456', status: 'Completed' }),
+      });
+
+    const { rerender } = render(<BatchDetailsPage batchId="batch-123" onNavigateToUpload={vi.fn()} />);
+
+    await flushMicrotasks();
+
+    rerender(<BatchDetailsPage batchId="batch-456" onNavigateToUpload={vi.fn()} />);
+
+    await flushMicrotasks();
+
+    expect(screen.getByText('batch-456')).toBeInTheDocument();
+    expect(screen.queryByText('Unable to load batch details')).not.toBeInTheDocument();
+    expect(screen.queryByText('Showing last successful retrieval')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(fetchBatchDetails).toHaveBeenCalledTimes(2);
   });
 });

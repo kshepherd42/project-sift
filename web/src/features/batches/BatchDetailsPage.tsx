@@ -140,6 +140,18 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
     refresh,
   } = useBatchDetails(batchId);
 
+  const liveAnnouncement = refreshWarning
+    ? `${refreshWarning.title}. ${refreshWarning.message}`
+    : isAutoRefreshPaused
+      ? 'Automatic refresh paused. Use manual refresh to try again.'
+      : isLongRunning
+        ? 'Batch processing is taking longer than expected.'
+        : summary?.batchStatus.normalized === 'processing'
+          ? 'Batch details are refreshing automatically while processing continues.'
+          : summary?.batchStatus.normalized === 'completed'
+            ? 'Batch processing completed.'
+            : '';
+
   if (isInitialLoading && !batch) {
     return (
       <div className="stack-lg">
@@ -183,6 +195,10 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
 
   return (
     <div className="stack-lg">
+      <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {liveAnnouncement}
+      </div>
+
       <PageHeader
         title="Batch details"
         subtitle="Inspect payloads, extracted property paths, diagnostics, and refresh status using the live batch retrieval contract."

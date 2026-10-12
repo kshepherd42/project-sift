@@ -111,10 +111,10 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
 
   const batchRef = useRef<BatchDetails | null>(null);
   const timerRef = useRef<number | null>(null);
-  const timeoutRef = useRef<number | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const requestContextRef = useRef<{ requestId: number; controller: AbortController; timeoutId: number } | null>(null);
   const requestInFlightRef = useRef(false);
   const retryAttemptRef = useRef(0);
+  const requestIdRef = useRef(0);
 
   batchRef.current = batch;
 
@@ -125,19 +125,17 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
     }
   }, []);
 
-  const clearRequestTimeout = useCallback(() => {
-    if (timeoutRef.current !== null) {
-      window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  }, []);
-
   const cancelInFlightRequest = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    clearRequestTimeout();
+    requestIdRef.current += 1;
+    const activeRequest = requestContextRef.current;
+    if (activeRequest) {
+      window.clearTimeout(activeRequest.timeoutId);
+      activeRequest.controller.abort();
+      requestContextRef.current = null;
+    }
+
     requestInFlightRef.current = false;
-  }, [clearRequestTimeout]);
+  }, []);
 
   const summary = useMemo(() => (batch ? deriveBatchDetailsSummary(batch) : null), [batch]);
 
@@ -176,9 +174,11 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
 
       clearScheduledRefresh();
       requestInFlightRef.current = true;
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
       const controller = new AbortController();
-      abortControllerRef.current = controller;
-      timeoutRef.current = window.setTimeout(() => controller.abort(), batchDetailsConfig.requestTimeoutMs);
+      const timeoutId = window.setTimeout(() => controller.abort(), batchDetailsConfig.requestTimeoutMs);
+      requestContextRef.current = { requestId, controller, timeoutId };
 
       const hasData = batchRef.current !== null;
       if (reason === 'manual' || reason === 'resume') {
@@ -193,6 +193,10 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
 
       try {
         const result = await fetchBatchDetails(normalizedBatchId, controller.signal);
+        if (requestIdRef.current !== requestId) {
+          return;
+        }
+
         const retrievedAt = new Date();
 
         retryAttemptRef.current = 0;
@@ -208,6 +212,10 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
           });
         }
       } catch (error) {
+        if (requestIdRef.current !== requestId || isAbortError(error)) {
+          return;
+        }
+
         const willRetry = isTransientApiError(error) && retryAttemptRef.current < batchDetailsConfig.retryDelaysMs.length;
         const nextRetryDelay = willRetry ? batchDetailsConfig.retryDelaysMs[retryAttemptRef.current] : null;
         const exhaustedRetries = isTransientApiError(error) && !willRetry;
@@ -228,14 +236,17 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
           });
         }
       } finally {
-        clearRequestTimeout();
-        abortControllerRef.current = null;
-        requestInFlightRef.current = false;
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
+        window.clearTimeout(timeoutId);
+
+        if (requestContextRef.current?.requestId === requestId) {
+          requestContextRef.current = null;
+          requestInFlightRef.current = false;
+          setIsInitialLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
-    [batchId, cancelInFlightRequest, clearRequestTimeout, clearScheduledRefresh, scheduleRefresh],
+    [batchId, cancelInFlightRequest, clearScheduledRefresh, scheduleRefresh],
   );
 
   const refreshBatch = useCallback(() => {

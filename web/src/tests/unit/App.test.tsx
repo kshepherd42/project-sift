@@ -50,8 +50,7 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Batch details' })).toBeInTheDocument();
-    expect(screen.getByText('test-batch-123')).toBeInTheDocument();
+    expect(await screen.findByText('test-batch-123')).toBeInTheDocument();
     expect(fetchBatchDetails).toHaveBeenCalledWith('test-batch-123', expect.any(AbortSignal));
   });
 

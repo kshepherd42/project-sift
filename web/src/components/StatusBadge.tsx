@@ -16,8 +16,9 @@ function resolveTone(status: string): BadgeTone {
     case 'successful':
       return 'success';
     case 'processing':
-    case 'recovered':
       return 'info';
+    case 'recovered':
+      return 'warning';
     case 'failed':
       return 'error';
     default:
