@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '../../gateway/apiClient';
-import { submitBatch } from '../../gateway/batchGateway';
-import { UploadPage } from './UploadPage';
+import { ApiError } from '../../../../gateway/apiClient';
+import { submitBatch } from '../../../../features/upload/gateway/batchGateway';
+import { UploadPage } from '../../../../features/upload/UploadPage';
 
-vi.mock('../../gateway/batchGateway', () => ({
+vi.mock('../../../../features/upload/gateway/batchGateway', () => ({
   submitBatch: vi.fn(),
 }));
 

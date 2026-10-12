@@ -2,9 +2,9 @@ import { Button } from '../../components/Button';
 import { DataState } from '../../components/DataState';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
-import type { AppRoute } from '../../hooks/useHashRoute';
+import type { NavigableRoute } from '../routes/useHashRoute';
 
-export function DashboardPage({ onNavigate }: { onNavigate: (route: AppRoute) => void }) {
+export function DashboardPage({ onNavigate }: { onNavigate: (route: NavigableRoute) => void }) {
   return (
     <div className="stack-lg">
       <PageHeader

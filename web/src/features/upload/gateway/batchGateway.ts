@@ -1,4 +1,4 @@
-import { ApiError, buildApiUrl, type ApiResult } from './apiClient';
+import { ApiError, buildApiUrl, type ApiResult } from '../../../gateway/apiClient';
 
 type BatchAcceptedResponse = {
   batchId?: string;

@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { useTheme } from '../hooks/useTheme';
-import type { AppRoute } from '../hooks/useHashRoute';
+import type { AppRoute, NavigableRoute } from '../features/routes/useHashRoute';
 import { Button } from './Button';
 
 type AppShellProps = {
   currentRoute: AppRoute;
-  onNavigate: (route: AppRoute) => void;
+  onNavigate: (route: NavigableRoute) => void;
   children: ReactNode;
 };
 

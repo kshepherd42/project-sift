@@ -4,7 +4,7 @@ import { DataState } from '../../components/DataState';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { ApiError } from '../../gateway/apiClient';
-import { submitBatch } from '../../gateway/batchGateway';
+import { submitBatch } from './gateway/batchGateway';
 import { formatFileSize } from '../../utils/formatting';
 import { uploadLimits, validateSelectedFiles } from './uploadLimits';
 

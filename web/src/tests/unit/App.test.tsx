@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import App from './App';
+import App from '../../App';
 
 describe('App', () => {
   beforeEach(() => {
@@ -36,6 +36,15 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'Batch details' })).toBeInTheDocument();
     expect(screen.getByText('test-batch-123')).toBeInTheDocument();
+  });
+
+  it('falls back to dashboard when batch hash contains invalid encoding', async () => {
+    window.location.hash = '#/batches/%E0%A4%A';
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('toggles dark mode theme and persists choice', async () => {

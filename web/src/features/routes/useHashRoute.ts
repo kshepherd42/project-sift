@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export type AppRoute = 'dashboard' | 'upload' | 'batch-details';
+export type NavigableRoute = Exclude<AppRoute, 'batch-details'>;
 
 type RouteState = {
   route: AppRoute;
@@ -21,14 +22,18 @@ function parseRoute(hash: string): RouteState {
   if (normalizedHash.startsWith(batchesHashPrefix)) {
     const rawBatchId = hash.slice(batchesHashPrefix.length).trim();
     if (rawBatchId.length > 0) {
-      return { route: 'batch-details', batchId: decodeURIComponent(rawBatchId) };
+      try {
+        return { route: 'batch-details', batchId: decodeURIComponent(rawBatchId) };
+      } catch {
+        return { route: 'dashboard', batchId: null };
+      }
     }
   }
 
   return { route: 'dashboard', batchId: null };
 }
 
-function toHash(route: AppRoute): string {
+function toHash(route: NavigableRoute): string {
   if (route === 'upload') {
     return uploadHash;
   }
@@ -62,7 +67,7 @@ export function useHashRoute() {
     };
   }, []);
 
-  const navigate = (nextRoute: AppRoute) => {
+  const navigate = (nextRoute: NavigableRoute) => {
     if (!isBrowser) {
       setState({ route: nextRoute, batchId: null });
       return;

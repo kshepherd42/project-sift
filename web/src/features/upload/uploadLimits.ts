@@ -1,7 +1,18 @@
-export const uploadLimits = {
+const defaultUploadLimits = {
   maxRequestBytes: 10 * 1024 * 1024,
   maxFileBytes: 2 * 1024 * 1024,
   maxFileCount: 32,
+} as const;
+
+function toPositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export const uploadLimits = {
+  maxRequestBytes: toPositiveInt(import.meta.env.VITE_UPLOAD_MAX_REQUEST_BYTES, defaultUploadLimits.maxRequestBytes),
+  maxFileBytes: toPositiveInt(import.meta.env.VITE_UPLOAD_MAX_FILE_BYTES, defaultUploadLimits.maxFileBytes),
+  maxFileCount: toPositiveInt(import.meta.env.VITE_UPLOAD_MAX_FILE_COUNT, defaultUploadLimits.maxFileCount),
 } as const;
 
 export type UploadValidationResult = {
