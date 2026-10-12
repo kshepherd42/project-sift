@@ -8,6 +8,7 @@ This folder contains upload-ready payload files for `POST /v1/batches`.
 - `first.bin`: valid JSON object (multi-file scenario, part 1).
 - `second.bin`: valid JSON array (multi-file scenario, part 2).
 - `nested.bin`: valid deeply nested JSON object.
+- `nested-2.bin`: valid nested JSON object.
 - `mixed.bin`: one complete JSON object followed by malformed candidate.
 - `malformed.bin`: malformed JSON candidate.
 - `empty.bin`: empty file (expected 400 invalid upload).
