@@ -20,13 +20,22 @@ describe('App', () => {
     expect(await screen.findByText('Recent activity unavailable')).toBeInTheDocument();
   });
 
-  it('navigates to upload placeholder route', async () => {
+  it('navigates to upload route', async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('link', { name: 'Upload' }));
 
     expect(await screen.findByRole('heading', { name: 'Upload' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upload' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('renders batch details placeholder for hash batch route', async () => {
+    window.location.hash = '#/batches/test-batch-123';
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Batch details' })).toBeInTheDocument();
+    expect(screen.getByText('test-batch-123')).toBeInTheDocument();
   });
 
   it('toggles dark mode theme and persists choice', async () => {

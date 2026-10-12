@@ -1,21 +1,47 @@
 import { useEffect, useState } from 'react';
 
-export type AppRoute = 'dashboard' | 'upload';
+export type AppRoute = 'dashboard' | 'upload' | 'batch-details';
+
+type RouteState = {
+  route: AppRoute;
+  batchId: string | null;
+};
 
 const dashboardHash = '#/dashboard';
 const uploadHash = '#/upload';
+const batchesHashPrefix = '#/batches/';
 const isBrowser = typeof window !== 'undefined';
 
-function parseRoute(hash: string): AppRoute {
-  return hash.toLowerCase() === uploadHash ? 'upload' : 'dashboard';
+function parseRoute(hash: string): RouteState {
+  const normalizedHash = hash.toLowerCase();
+  if (normalizedHash === uploadHash) {
+    return { route: 'upload', batchId: null };
+  }
+
+  if (normalizedHash.startsWith(batchesHashPrefix)) {
+    const rawBatchId = hash.slice(batchesHashPrefix.length).trim();
+    if (rawBatchId.length > 0) {
+      return { route: 'batch-details', batchId: decodeURIComponent(rawBatchId) };
+    }
+  }
+
+  return { route: 'dashboard', batchId: null };
 }
 
 function toHash(route: AppRoute): string {
-  return route === 'upload' ? uploadHash : dashboardHash;
+  if (route === 'upload') {
+    return uploadHash;
+  }
+
+  return dashboardHash;
+}
+
+function toBatchHash(batchId: string): string {
+  return `${batchesHashPrefix}${encodeURIComponent(batchId)}`;
 }
 
 export function useHashRoute() {
-  const [route, setRoute] = useState<AppRoute>(() => parseRoute(isBrowser ? window.location.hash : ''));
+  const [state, setState] = useState<RouteState>(() => parseRoute(isBrowser ? window.location.hash : ''));
 
   useEffect(() => {
     if (!isBrowser) {
@@ -27,7 +53,7 @@ export function useHashRoute() {
     }
 
     const onHashChange = () => {
-      setRoute(parseRoute(window.location.hash));
+      setState(parseRoute(window.location.hash));
     };
 
     window.addEventListener('hashchange', onHashChange);
@@ -38,7 +64,7 @@ export function useHashRoute() {
 
   const navigate = (nextRoute: AppRoute) => {
     if (!isBrowser) {
-      setRoute(nextRoute);
+      setState({ route: nextRoute, batchId: null });
       return;
     }
 
@@ -46,9 +72,28 @@ export function useHashRoute() {
     if (window.location.hash !== nextHash) {
       window.location.hash = nextHash;
     } else {
-      setRoute(nextRoute);
+      setState({ route: nextRoute, batchId: null });
     }
   };
 
-  return { route, navigate };
+  const navigateToBatchDetails = (batchId: string) => {
+    const normalizedBatchId = batchId.trim();
+    if (!normalizedBatchId) {
+      return;
+    }
+
+    if (!isBrowser) {
+      setState({ route: 'batch-details', batchId: normalizedBatchId });
+      return;
+    }
+
+    const nextHash = toBatchHash(normalizedBatchId);
+    if (window.location.hash !== nextHash) {
+      window.location.hash = nextHash;
+    } else {
+      setState({ route: 'batch-details', batchId: normalizedBatchId });
+    }
+  };
+
+  return { route: state.route, batchId: state.batchId, navigate, navigateToBatchDetails };
 }
