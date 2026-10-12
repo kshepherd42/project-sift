@@ -2,6 +2,8 @@ type BadgeTone = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 type StatusBadgeProps = {
   status: string;
+  tone?: BadgeTone;
+  ariaLabel?: string;
 };
 
 function normalize(status: string): string {
@@ -14,8 +16,9 @@ function resolveTone(status: string): BadgeTone {
     case 'successful':
       return 'success';
     case 'processing':
-    case 'recovered':
       return 'info';
+    case 'recovered':
+      return 'warning';
     case 'failed':
       return 'error';
     default:
@@ -23,11 +26,11 @@ function resolveTone(status: string): BadgeTone {
   }
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
-  const tone = resolveTone(status);
+export function StatusBadge({ status, tone, ariaLabel }: StatusBadgeProps) {
+  const resolvedTone = tone ?? resolveTone(status);
 
   return (
-    <span className={`status-badge status-${tone}`} aria-label={`Status ${status}`}>
+    <span className={`status-badge status-${resolvedTone}`} aria-label={ariaLabel ?? `Status ${status}`}>
       {status}
     </span>
   );

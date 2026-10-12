@@ -1,4 +1,4 @@
-import { BatchDetailsPlaceholderPage } from '../batches/BatchDetailsPlaceholderPage';
+import { BatchDetailsPage } from '../batches/BatchDetailsPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { UploadPage } from '../upload/UploadPage';
 import type { AppRoute, NavigableRoute } from './useHashRoute';
@@ -16,7 +16,7 @@ export function AppRouteContent({ route, batchId, onNavigate, onNavigateToBatchD
   }
 
   if (route === 'batch-details' && batchId) {
-    return <BatchDetailsPlaceholderPage batchId={batchId} onNavigateToUpload={() => onNavigate('upload')} />;
+    return <BatchDetailsPage batchId={batchId} onNavigateToUpload={() => onNavigate('upload')} />;
   }
 
   return <DashboardPage onNavigate={onNavigate} />;

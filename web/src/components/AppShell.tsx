@@ -63,7 +63,7 @@ export function AppShell({ currentRoute, onNavigate, children }: AppShellProps) 
       <div className="content-shell">
         <header className="topbar">
           <div>
-            <p className="topbar-label">Stage 3 Workflow</p>
+            <p className="topbar-label">Batch processing workflow</p>
             <strong>{currentSectionLabel}</strong>
           </div>
           <Button variant="secondary" onClick={toggleTheme} aria-label="Toggle dark mode">

@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../../App';
+import { fetchBatchDetails } from '../../features/batches/gateway/batchDetailsGateway';
+
+vi.mock('../../features/batches/gateway/batchDetailsGateway', () => ({
+  fetchBatchDetails: vi.fn(),
+}));
 
 describe('App', () => {
   beforeEach(() => {
@@ -8,6 +13,17 @@ describe('App', () => {
     localStorage.clear();
     document.documentElement.removeAttribute('data-theme');
     vi.restoreAllMocks();
+    vi.mocked(fetchBatchDetails).mockResolvedValue({
+      statusCode: 200,
+      data: {
+        batchId: 'test-batch-123',
+        status: 'Completed',
+        createdUtc: '2026-10-12T12:00:00Z',
+        completedUtc: '2026-10-12T12:00:04Z',
+        responseWarnings: [],
+        payloads: [],
+      },
+    });
   });
 
   it('renders dashboard shell and discoverable upload entry point', async () => {
@@ -34,8 +50,8 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Batch details' })).toBeInTheDocument();
-    expect(screen.getByText('test-batch-123')).toBeInTheDocument();
+    expect(await screen.findByText('test-batch-123')).toBeInTheDocument();
+    expect(fetchBatchDetails).toHaveBeenCalledWith('test-batch-123', expect.any(AbortSignal));
   });
 
   it('falls back to dashboard when batch hash contains invalid encoding', async () => {
