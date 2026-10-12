@@ -4,56 +4,47 @@ import App from './App';
 
 describe('App', () => {
   beforeEach(() => {
+    window.location.hash = '#/dashboard';
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
     vi.restoreAllMocks();
   });
 
-  it('shows returned HTTP status code and JSON body when request succeeds', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ status: 'Healthy' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
+  it('renders dashboard shell and discoverable upload entry point', async () => {
     render(<App />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Loading API health...');
-
-    expect(await screen.findByText('HTTP Status: 200')).toBeInTheDocument();
-    expect(screen.getByLabelText('health-json')).toHaveTextContent('"status": "Healthy"');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Go to upload page' })).toBeInTheDocument();
+    expect(screen.getByText('Operational overview unavailable')).toBeInTheDocument();
+    expect(await screen.findByText('Recent activity unavailable')).toBeInTheDocument();
   });
 
-  it('shows a useful error state when the request fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network error'));
-
+  it('navigates to upload placeholder route', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Unable to reach the API. Check that the backend is running and try again.',
-    );
+    fireEvent.click(screen.getByRole('link', { name: 'Upload' }));
+
+    expect(await screen.findByRole('heading', { name: 'Upload' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upload' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('retries the request when retry is clicked', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockRejectedValueOnce(new TypeError('Network error'))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: 'Healthy' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-      );
-
+  it('toggles dark mode theme and persists choice', async () => {
     render(<App />);
 
-    const retryButton = await screen.findByRole('button', { name: 'Retry' });
-    fireEvent.click(retryButton);
+    const toggleButton = screen.getByRole('button', { name: 'Toggle dark mode' });
+    fireEvent.click(toggleButton);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(document.documentElement.dataset.theme).toBe('dark');
+      expect(localStorage.getItem('projectsift-theme')).toBe('dark');
     });
+  });
 
-    expect(await screen.findByText('HTTP Status: 200')).toBeInTheDocument();
+  it('does not call the API while dashboard data is unavailable', () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    render(<App />);
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
