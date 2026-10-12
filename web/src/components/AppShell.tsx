@@ -42,7 +42,7 @@ export function AppShell({ currentRoute, onNavigate, children }: AppShellProps) 
     <div className="app-shell">
       <aside className="sidebar" aria-label="Main navigation">
         <div className="brand">ProjectSift</div>
-        <nav>
+        <nav aria-label="Main navigation">
           <NavLink
             href="#/dashboard"
             label="Dashboard"

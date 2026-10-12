@@ -10,7 +10,6 @@ function normalize(status: string): string {
 
 function resolveTone(status: string): BadgeTone {
   switch (normalize(status)) {
-    case 'healthy':
     case 'completed':
     case 'successful':
       return 'success';
