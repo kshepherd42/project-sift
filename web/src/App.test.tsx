@@ -4,10 +4,64 @@ import App from './App';
 
 describe('App', () => {
   beforeEach(() => {
+    window.location.hash = '#/dashboard';
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
     vi.restoreAllMocks();
   });
 
-  it('shows returned HTTP status code and JSON body when request succeeds', async () => {
+  it('renders dashboard shell and discoverable upload entry point', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'Healthy' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Go to upload page' })).toBeInTheDocument();
+    expect(await screen.findByText('Recent activity unavailable')).toBeInTheDocument();
+  });
+
+  it('navigates to upload placeholder route', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'Healthy' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Upload' }));
+
+    expect(await screen.findByRole('heading', { name: 'Upload' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upload' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('toggles dark mode theme and persists choice', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'Healthy' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(<App />);
+
+    const toggleButton = screen.getByRole('button', { name: 'Toggle dark mode' });
+    fireEvent.click(toggleButton);
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('dark');
+      expect(localStorage.getItem('projectsift-theme')).toBe('dark');
+    });
+  });
+
+  it('shows live health status when dashboard request succeeds', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ status: 'Healthy' }), {
         status: 200,
@@ -17,24 +71,12 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Loading API health...');
-
-    expect(await screen.findByText('HTTP Status: 200')).toBeInTheDocument();
-    expect(screen.getByLabelText('health-json')).toHaveTextContent('"status": "Healthy"');
+    expect(screen.getByRole('status')).toHaveTextContent('Loading dashboard');
+    expect(await screen.findByLabelText('Status Healthy')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a useful error state when the request fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network error'));
-
-    render(<App />);
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Unable to reach the API. Check that the backend is running and try again.',
-    );
-  });
-
-  it('retries the request when retry is clicked', async () => {
+  it('shows dashboard error state and retries', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockRejectedValueOnce(new TypeError('Network error'))
@@ -47,13 +89,14 @@ describe('App', () => {
 
     render(<App />);
 
-    const retryButton = await screen.findByRole('button', { name: 'Retry' });
-    fireEvent.click(retryButton);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Dashboard unavailable');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    expect(await screen.findByText('HTTP Status: 200')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Status Healthy')).toBeInTheDocument();
   });
 });

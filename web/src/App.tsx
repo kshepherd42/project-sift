@@ -1,11 +1,15 @@
-import { HealthWidget } from './features/health/HealthWidget';
+import { AppShell } from './components/AppShell';
+import { DashboardPage } from './features/dashboard/DashboardPage';
+import { UploadPlaceholderPage } from './features/upload/UploadPlaceholderPage';
+import { useHashRoute } from './hooks/useHashRoute';
 
 function App() {
+  const { route, navigate } = useHashRoute();
+
   return (
-    <main style={{ fontFamily: 'Arial, sans-serif', margin: '2rem auto', maxWidth: 720, padding: '0 1rem' }}>
-      <h1>ProjectSift</h1>
-      <HealthWidget />
-    </main>
+    <AppShell currentRoute={route} onNavigate={navigate}>
+      {route === 'upload' ? <UploadPlaceholderPage /> : <DashboardPage onNavigate={navigate} />}
+    </AppShell>
   );
 }
 
