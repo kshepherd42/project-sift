@@ -336,6 +336,20 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
         </section>
       )}
 
+      {isLongRunning && (
+        <section className="callout callout-info" aria-label="Long running batch notice">
+          <h3>Taking longer than expected</h3>
+          <p>This batch is still processing after {formatDuration(currentElapsedMs)}. The backend status is preserved while polling continues.</p>
+        </section>
+      )}
+
+      {isAutoRefreshPaused && (
+        <section className="callout callout-warning" aria-label="Automatic refresh paused">
+          <h3>Automatic refresh paused</h3>
+          <p>Automatic refresh stopped after repeated transient failures. Use manual refresh to try again.</p>
+        </section>
+      )}
+
       <SectionCard title="Search, copy, and export" subtitle="Search across extracted property paths and diagnostics using the currently loaded batch response.">
         <div className="stack-sm">
           <label className="field stack-xs">
@@ -420,20 +434,6 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
         </div>
       </SectionCard>
 
-      {isLongRunning && (
-        <section className="callout callout-info" aria-label="Long running batch notice">
-          <h3>Taking longer than expected</h3>
-          <p>This batch is still processing after {formatDuration(currentElapsedMs)}. The backend status is preserved while polling continues.</p>
-        </section>
-      )}
-
-      {isAutoRefreshPaused && (
-        <section className="callout callout-warning" aria-label="Automatic refresh paused">
-          <h3>Automatic refresh paused</h3>
-          <p>Automatic refresh stopped after repeated transient failures. Use manual refresh to try again.</p>
-        </section>
-      )}
-
       <SectionCard title="Batch summary" subtitle="Backend status is shown separately from derived document outcomes.">
         <dl className="metric-list" aria-label="Batch details summary">
           <div>
@@ -487,7 +487,7 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
         </dl>
       </SectionCard>
 
-      <SectionCard title="Payloads and documents" subtitle="All groups start collapsed so large batches remain scannable.">
+      <SectionCard title="Payloads and documents" subtitle="Payload = one uploaded file. Document = one extracted JSON object/array found in that payload.">
         {batch.payloads.length === 0 ? (
           <DataState
             kind="empty"

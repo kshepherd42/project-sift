@@ -19,5 +19,5 @@ export function AppRouteContent({ route, batchId, onNavigate, onNavigateToBatchD
     return <BatchDetailsPage batchId={batchId} onNavigateToUpload={() => onNavigate('upload')} />;
   }
 
-  return <DashboardPage onNavigate={onNavigate} />;
+  return <DashboardPage onNavigate={onNavigate} onNavigateToBatchDetails={onNavigateToBatchDetails} />;
 }

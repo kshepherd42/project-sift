@@ -27,6 +27,20 @@ function buildSignature(file: File): string {
   return `${file.name}::${file.size}::${file.lastModified}`;
 }
 
+function getFileValidationIssues(file: File): string[] {
+  const issues: string[] = [];
+
+  if (file.size === 0) {
+    issues.push('Empty file');
+  }
+
+  if (file.size > uploadLimits.maxFileBytes) {
+    issues.push(`Exceeds ${formatFileSize(uploadLimits.maxFileBytes)}`);
+  }
+
+  return issues;
+}
+
 export function UploadPage({ onBatchCreated }: UploadPageProps) {
   const [files, setFiles] = useState<UploadFileEntry[]>([]);
   const [selectionNote, setSelectionNote] = useState<string | null>(null);
@@ -37,6 +51,18 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
 
   const selectedFiles = useMemo(() => files.map((entry) => entry.file), [files]);
   const validation = useMemo(() => validateSelectedFiles(selectedFiles), [selectedFiles]);
+  const invalidFileByEntryId = useMemo(() => {
+    const invalidMap = new Map<number, string[]>();
+
+    for (const entry of files) {
+      const issues = getFileValidationIssues(entry.file);
+      if (issues.length > 0) {
+        invalidMap.set(entry.id, issues);
+      }
+    }
+
+    return invalidMap;
+  }, [files]);
   const canSubmit = files.length > 0 && validation.errors.length === 0 && !isSubmitting;
 
   const addFiles = (incomingFiles: File[]) => {
@@ -206,10 +232,13 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
           <>
             <ul className="upload-file-list" aria-label="Selected files">
               {files.map((entry, index) => (
-                <li key={entry.id}>
+                <li key={entry.id} className={invalidFileByEntryId.has(entry.id) ? 'upload-file-invalid' : undefined}>
                   <div>
                     <strong>{entry.file.name}</strong>
                     <div className="upload-file-meta">File {index + 1} · {formatFileSize(entry.file.size)}</div>
+                    {invalidFileByEntryId.has(entry.id) && (
+                      <div className="upload-file-error" role="status">{invalidFileByEntryId.get(entry.id)?.join(' · ')}</div>
+                    )}
                   </div>
                   <Button variant="secondary" onClick={() => removeFile(entry.id)} disabled={isSubmitting}>
                     Remove

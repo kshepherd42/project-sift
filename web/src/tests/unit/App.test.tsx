@@ -32,7 +32,7 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Go to upload page' })).toBeInTheDocument();
-    expect(screen.getByText('Operational overview unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Quick actions' })).toBeInTheDocument();
     expect(await screen.findByText('Recent activity unavailable')).toBeInTheDocument();
   });
 
