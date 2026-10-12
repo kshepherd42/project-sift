@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react';
+
 import { Button } from '../../components/Button';
 import { DataState } from '../../components/DataState';
 import { PageHeader } from '../../components/PageHeader';
@@ -15,6 +17,22 @@ import {
   type BatchDocument,
   type BatchPayload,
 } from './batchDetailsModel';
+import {
+  describeDiagnosticMatch,
+  describeSearchMatch,
+  searchBatchDetails,
+  searchBatchPathOccurrences,
+  type BatchPathMode,
+} from './batchInsightsModel';
+import {
+  buildBatchExportFilename,
+  copyTextToClipboard,
+  createBatchCsvRows,
+  createBatchJsonExport,
+  serializeBatchCsv,
+  serializeBatchJsonExport,
+  triggerDownload,
+} from './batchExport';
 import { interpretDocumentStatus } from './batchDetailsStatus';
 import { useBatchDetails } from './useBatchDetails';
 
@@ -126,6 +144,10 @@ function PayloadGroup({ payload, order }: { payload: BatchPayload; order: number
 }
 
 export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPageProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pathMode, setPathMode] = useState<BatchPathMode>('occurrences');
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
   const {
     batch,
     summary,
@@ -139,6 +161,76 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
     isLongRunning,
     refresh,
   } = useBatchDetails(batchId);
+
+  const searchResults = useMemo(() => {
+    if (!batch) {
+      return null;
+    }
+
+    return searchBatchDetails(batch, searchQuery);
+  }, [batch, searchQuery]);
+
+  const matchingPathOccurrences = useMemo(() => {
+    if (!batch) {
+      return [];
+    }
+
+    return searchBatchPathOccurrences(batch, searchQuery, pathMode);
+  }, [batch, pathMode, searchQuery]);
+
+  const matchingDiagnosticEntries = searchResults?.diagnosticEntries ?? [];
+
+  async function handleCopyMatchingPaths() {
+    if (matchingPathOccurrences.length === 0) {
+      setFeedbackMessage('No matching property paths were available to copy.');
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(matchingPathOccurrences.map(describeSearchMatch).join('\n'));
+      setFeedbackMessage(`Copied ${formatCount(matchingPathOccurrences.length)} path${matchingPathOccurrences.length === 1 ? '' : 's'} to the clipboard.`);
+    } catch {
+      setFeedbackMessage('Clipboard access is unavailable in this browser context.');
+    }
+  }
+
+  async function handleCopyDiagnosticMatches() {
+    if (matchingDiagnosticEntries.length === 0) {
+      setFeedbackMessage('No matching diagnostics were available to copy.');
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(matchingDiagnosticEntries.map(describeDiagnosticMatch).join('\n'));
+      setFeedbackMessage(`Copied ${formatCount(matchingDiagnosticEntries.length)} diagnostic${matchingDiagnosticEntries.length === 1 ? '' : 's'} to the clipboard.`);
+    } catch {
+      setFeedbackMessage('Clipboard access is unavailable in this browser context.');
+    }
+  }
+
+  function handleExportJson() {
+    if (!batch || !searchResults) {
+      return;
+    }
+
+    const exportData = createBatchJsonExport(batch, matchingPathOccurrences, pathMode, searchResults.hasQuery ? searchResults.query : null);
+    const filename = buildBatchExportFilename(batch.batchId, 'json', pathMode);
+    triggerDownload(serializeBatchJsonExport(exportData), filename, 'application/json');
+    setFeedbackMessage(`Exported ${pathMode === 'unique' ? 'unique' : 'matching'} paths as JSON.`);
+  }
+
+  function handleExportCsv() {
+    if (!batch) {
+      return;
+    }
+
+    const rows = createBatchCsvRows(batch.batchId, matchingPathOccurrences);
+    const filename = buildBatchExportFilename(batch.batchId, 'csv', pathMode);
+    triggerDownload(serializeBatchCsv(rows), filename, 'text/csv');
+    setFeedbackMessage(`Exported ${formatCount(rows.length)} path${rows.length === 1 ? '' : 's'} as CSV.`);
+  }
+
+  const selectedPathCount = matchingPathOccurrences.length;
 
   const liveAnnouncement = refreshWarning
     ? `${refreshWarning.title}. ${refreshWarning.message}`
@@ -243,6 +335,90 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
           </details>
         </section>
       )}
+
+      <SectionCard title="Search, copy, and export" subtitle="Search across extracted property paths and diagnostics using the currently loaded batch response.">
+        <div className="stack-sm">
+          <label className="field stack-xs">
+            <span>Search loaded results</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by path, payload, document, status, or diagnostic text"
+            />
+          </label>
+
+          <div className="button-row" role="group" aria-label="Path matching mode">
+            <Button variant={pathMode === 'occurrences' ? 'primary' : 'secondary'} onClick={() => setPathMode('occurrences')}>
+              Path occurrences
+            </Button>
+            <Button variant={pathMode === 'unique' ? 'primary' : 'secondary'} onClick={() => setPathMode('unique')}>
+              Unique paths
+            </Button>
+          </div>
+
+          <div className="button-row">
+            <Button variant="secondary" onClick={() => void handleCopyMatchingPaths()} disabled={selectedPathCount === 0}>
+              Copy matching paths
+            </Button>
+            <Button variant="secondary" onClick={() => void handleCopyDiagnosticMatches()} disabled={matchingDiagnosticEntries.length === 0}>
+              Copy matching diagnostics
+            </Button>
+            <Button variant="secondary" onClick={handleExportCsv} disabled={selectedPathCount === 0}>
+              Export CSV
+            </Button>
+            <Button variant="secondary" onClick={handleExportJson} disabled={selectedPathCount === 0}>
+              Export JSON
+            </Button>
+          </div>
+
+          <dl className="metric-list" aria-label="Search summary">
+            <div>
+              <dt>Matching paths</dt>
+              <dd>{formatCount(selectedPathCount)}</dd>
+            </div>
+            <div>
+              <dt>Matching diagnostics</dt>
+              <dd>{formatCount(matchingDiagnosticEntries.length)}</dd>
+            </div>
+          </dl>
+
+          {feedbackMessage && <p className="batch-muted" role="status">{feedbackMessage}</p>}
+
+          {searchResults && searchResults.hasQuery && selectedPathCount === 0 && matchingDiagnosticEntries.length === 0 ? (
+            <DataState kind="empty" title="No matches found" description="Try a different search term or clear the query to browse all results." />
+          ) : null}
+
+          {selectedPathCount > 0 && (
+            <details className="diagnostics-panel" open={searchQuery.trim().length === 0}>
+              <summary>{selectedPathCount} path{selectedPathCount === 1 ? '' : 's'} available for the current view</summary>
+              <ul className="plain-list diagnostics-list" aria-label="Matching property paths">
+                {matchingPathOccurrences.map((match) => (
+                  <li key={match.key}>
+                    <strong>{match.propertyPath}</strong>
+                    <div className="batch-muted">{describeSearchMatch(match)}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {matchingDiagnosticEntries.length > 0 && (
+            <details className="diagnostics-panel">
+              <summary>{matchingDiagnosticEntries.length} diagnostic{matchingDiagnosticEntries.length === 1 ? '' : 's'} match the current search</summary>
+              <ul className="plain-list diagnostics-list" aria-label="Matching diagnostics">
+                {matchingDiagnosticEntries.map((entry) => (
+                  <li key={entry.key}>
+                    <strong>{entry.code}</strong>
+                    <div>{entry.message}</div>
+                    <div className="batch-muted">{describeDiagnosticMatch(entry)}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </SectionCard>
 
       {isLongRunning && (
         <section className="callout callout-info" aria-label="Long running batch notice">
