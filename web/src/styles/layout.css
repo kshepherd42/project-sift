@@ -96,6 +96,30 @@
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
+.recent-batch-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.recent-batch-link {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--panel);
+  color: inherit;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.recent-batch-link:hover {
+  border-color: var(--focus);
+}
+
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: 1fr;

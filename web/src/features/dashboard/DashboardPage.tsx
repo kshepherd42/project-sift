@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '../../components/Button';
 import { DataState } from '../../components/DataState';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
+import { formatTimestamp } from '../../utils/formatting';
+import { loadRecentBatchActivity } from './recentBatchActivity';
 import type { NavigableRoute } from '../routes/useHashRoute';
 
 type DashboardPageProps = {
@@ -13,6 +15,7 @@ type DashboardPageProps = {
 
 export function DashboardPage({ onNavigate, onNavigateToBatchDetails }: DashboardPageProps) {
   const [batchLookupId, setBatchLookupId] = useState('');
+  const recentActivity = useMemo(() => loadRecentBatchActivity(), []);
 
   const normalizedLookupId = batchLookupId.trim();
 
@@ -58,12 +61,30 @@ export function DashboardPage({ onNavigate, onNavigateToBatchDetails }: Dashboar
           </div>
         </SectionCard>
 
-        <SectionCard title="Recent activity" subtitle="History/search across all batches requires a list endpoint that is not yet available.">
-          <DataState
-            kind="unavailable"
-            title="Recent activity unavailable"
-            description="The backend currently supports batch submission and by-id retrieval only. Keep your batch IDs to revisit details later."
-          />
+        <SectionCard title="Recent activity" subtitle="Recently viewed batches in this browser.">
+          {recentActivity.length === 0 ? (
+            <DataState
+              kind="empty"
+              title="No recent activity yet"
+              description="Open a batch details page and it will appear here for quick access."
+            />
+          ) : (
+            <ul className="plain-list recent-batch-list" aria-label="Recent batches">
+              {recentActivity.map((entry) => (
+                <li key={entry.batchId}>
+                  <button
+                    type="button"
+                    className="recent-batch-link"
+                    onClick={() => onNavigateToBatchDetails(entry.batchId)}
+                    aria-label={`Open batch ${entry.batchId}`}
+                  >
+                    <strong>{entry.batchId}</strong>
+                    <span className="batch-muted">Viewed {formatTimestamp(entry.lastViewedUtc)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </SectionCard>
 
         <SectionCard title="Terminology" subtitle="Short definitions used in batch details.">
