@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { recordRecentBatchActivity } from '../dashboard/recentBatchActivity';
 
 export type AppRoute = 'dashboard' | 'upload' | 'batch-details';
 export type NavigableRoute = Exclude<AppRoute, 'batch-details'>;
@@ -47,6 +48,14 @@ function toBatchHash(batchId: string): string {
 
 export function useHashRoute() {
   const [state, setState] = useState<RouteState>(() => parseRoute(isBrowser ? window.location.hash : ''));
+
+  useEffect(() => {
+    if (state.route !== 'batch-details' || !state.batchId) {
+      return;
+    }
+
+    recordRecentBatchActivity(state.batchId);
+  }, [state.batchId, state.route]);
 
   useEffect(() => {
     if (!isBrowser) {

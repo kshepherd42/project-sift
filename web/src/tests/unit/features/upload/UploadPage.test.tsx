@@ -59,6 +59,23 @@ describe('UploadPage', () => {
     expect(screen.getByRole('button', { name: 'Submit batch' })).toBeDisabled();
   });
 
+  it('highlights file cards that have file-level validation issues', async () => {
+    render(<UploadPage onBatchCreated={onBatchCreated} />);
+
+    const picker = screen.getByLabelText('Choose files') as HTMLInputElement;
+    const empty = new File([], 'empty.bin');
+    const valid = new File(['{}'], 'valid.bin');
+
+    fireEvent.change(picker, { target: { files: [empty, valid] } });
+
+    const emptyLabel = await screen.findByText('empty.bin');
+    const emptyCard = emptyLabel.closest('li');
+
+    expect(emptyCard).toHaveClass('upload-file-invalid');
+    expect(screen.getByText('Empty file')).toBeInTheDocument();
+    expect(screen.getByText('valid.bin').closest('li')).not.toHaveClass('upload-file-invalid');
+  });
+
   it('submits files and navigates after successful batch creation', async () => {
     vi.mocked(submitBatch).mockResolvedValue({
       statusCode: 202,

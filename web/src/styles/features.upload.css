@@ -67,6 +67,18 @@
   font-size: 0.9rem;
 }
 
+.upload-file-list li.upload-file-invalid {
+  border-color: var(--error-text);
+  background: var(--error-bg);
+}
+
+.upload-file-error {
+  margin-top: 0.25rem;
+  color: var(--error-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .validation-errors {
   border: 1px solid var(--error-text);
   background: var(--error-bg);

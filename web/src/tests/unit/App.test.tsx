@@ -32,8 +32,20 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Go to upload page' })).toBeInTheDocument();
-    expect(screen.getByText('Operational overview unavailable')).toBeInTheDocument();
-    expect(await screen.findByText('Recent activity unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Quick actions' })).toBeInTheDocument();
+    expect(await screen.findByText('No recent activity yet')).toBeInTheDocument();
+  });
+
+  it('adds viewed batch to recent activity list', async () => {
+    window.location.hash = '#/batches/test-batch-123';
+
+    render(<App />);
+
+    expect(await screen.findByText('test-batch-123')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Dashboard' }));
+
+    expect(await screen.findByRole('button', { name: 'Open batch test-batch-123' })).toBeInTheDocument();
   });
 
   it('navigates to upload route', async () => {
