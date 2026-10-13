@@ -55,6 +55,23 @@ describe('batchInsightsModel', () => {
     expect(uniqueOccurrences.map((entry) => entry.propertyPath)).toEqual(['customer.id', 'customer.name']);
   });
 
+  it('preserves repeated paths with unique occurrence keys', () => {
+    const repeatedPathBatch = normalizeBatchDetailsResponse({
+      batchId: 'batch-repeated-path',
+      status: 'Completed',
+      payloads: [{
+        documents: [{
+          propertyPaths: [{ value: 'item.id' }, { value: 'item.id' }],
+        }],
+      }],
+    });
+
+    const occurrences = collectBatchPathOccurrences(repeatedPathBatch);
+
+    expect(occurrences.map((entry) => entry.propertyPath)).toEqual(['item.id', 'item.id']);
+    expect(new Set(occurrences.map((entry) => entry.key)).size).toBe(2);
+  });
+
   it('filters paths and diagnostics by the search query', () => {
     const result = searchBatchDetails(batch, 'customer');
 
@@ -72,5 +89,27 @@ describe('batchInsightsModel', () => {
     const firstPathMatch = searchBatchPathOccurrences(batch, 'customer', 'occurrences')[0];
     expect(describeSearchMatch(firstPathMatch)).toContain('customer.id');
     expect(describeDiagnosticMatch(diagnosticResult.diagnosticEntries[0])).toContain('batch-999');
+  });
+
+  it('searches names, statuses, nested paths, and diagnostic text case-insensitively', () => {
+    const nestedBatch = normalizeBatchDetailsResponse({
+      batchId: 'batch-nested-search',
+      status: 'Completed',
+      payloads: [{
+        payloadName: 'Inventory.BIN',
+        documents: [{
+          documentName: 'Warehouse Order',
+          status: 'Recovered',
+          propertyPaths: [{ value: 'warehouse.zone' }],
+          diagnostics: [{ code: 'RECOVERY_NOTE', message: 'Recovered from truncated input.' }],
+        }],
+      }],
+    });
+
+    expect(searchBatchDetails(nestedBatch, 'WAREHOUSE').pathOccurrences).toHaveLength(1);
+    expect(searchBatchDetails(nestedBatch, 'inventory.bin').pathOccurrences).toHaveLength(1);
+    expect(searchBatchDetails(nestedBatch, 'recovered').pathOccurrences).toHaveLength(1);
+    expect(searchBatchDetails(nestedBatch, 'TRUNCATED').diagnosticEntries).toHaveLength(1);
+    expect(searchBatchDetails(nestedBatch, '   ').pathOccurrences).toHaveLength(1);
   });
 });

@@ -118,6 +118,11 @@
   margin-left: auto;
 }
 
+.result-group summary > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .result-group summary::-webkit-details-marker {
   display: none;
 }
@@ -143,6 +148,18 @@
 
 .property-path-list {
   word-break: break-word;
+}
+
+.property-path-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.property-path-list li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .diagnostics-panel {

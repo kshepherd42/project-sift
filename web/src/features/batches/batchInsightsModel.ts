@@ -58,9 +58,9 @@ function collectPathOccurrences(batch: BatchDetails): BatchPathOccurrence[] {
 
   for (const payload of batch.payloads) {
     for (const document of payload.documents) {
-      for (const propertyPath of document.propertyPaths) {
+      for (const [pathIndex, propertyPath] of document.propertyPaths.entries()) {
         occurrences.push({
-          key: `${payload.key}-${document.key}-${propertyPath}`,
+          key: `${payload.key}-${document.key}-path-${pathIndex}`,
           batchId: batch.batchId,
           batchStatus: batch.status,
           payloadIndex: payload.payloadIndex,

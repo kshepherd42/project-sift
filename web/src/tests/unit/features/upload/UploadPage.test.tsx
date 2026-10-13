@@ -34,7 +34,7 @@ describe('UploadPage', () => {
   it('adds dropped files', async () => {
     render(<UploadPage onBatchCreated={onBatchCreated} />);
 
-    const dropTarget = screen.getByText('Drop files here or choose files manually.').closest('div');
+    const dropTarget = screen.getByText('Drop files here or choose from your device.').closest('div');
     expect(dropTarget).not.toBeNull();
 
     const dropped = new File(['{}'], 'dropped.bin');
@@ -116,6 +116,7 @@ describe('UploadPage', () => {
     fireEvent.change(picker, { target: { files: [new File(['{}'], 'payload.bin')] } });
 
     const submitButton = screen.getByRole('button', { name: 'Submit batch' });
+    submitButton.focus();
     fireEvent.click(submitButton);
     fireEvent.click(submitButton);
 
@@ -143,9 +144,13 @@ describe('UploadPage', () => {
     const picker = screen.getByLabelText('Choose files') as HTMLInputElement;
     fireEvent.change(picker, { target: { files: [new File(['{}'], 'payload.bin')] } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Submit batch' }));
+    const submitButton = screen.getByRole('button', { name: 'Submit batch' });
+    submitButton.focus();
+    fireEvent.click(submitButton);
 
-    expect(await screen.findByRole('dialog', { name: 'Upload failed' })).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: 'Upload failed' });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.querySelector('button')).toHaveFocus();
     expect(screen.getByText('Upload rejected by backend validation')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Technical details'));
@@ -156,7 +161,25 @@ describe('UploadPage', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Upload failed' })).not.toBeInTheDocument();
     });
+    expect(submitButton).toHaveFocus();
 
     expect(screen.getByText('payload.bin')).toBeInTheDocument();
+  });
+
+  it('dismisses the upload error dialog with Escape', async () => {
+    vi.mocked(submitBatch).mockRejectedValue(new Error('Network unavailable.'));
+
+    render(<UploadPage onBatchCreated={onBatchCreated} />);
+
+    fireEvent.change(screen.getByLabelText('Choose files'), { target: { files: [new File(['{}'], 'payload.bin')] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit batch' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Upload failed' });
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Upload failed' })).not.toBeInTheDocument();
+    });
+    expect(dialog).not.toBeInTheDocument();
   });
 });
