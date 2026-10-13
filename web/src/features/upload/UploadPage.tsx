@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState, type ChangeEventHandler, type DragEventHandler } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEventHandler, type DragEventHandler } from 'react';
 import { Button } from '../../components/Button';
-import { DataState } from '../../components/DataState';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { ApiError } from '../../gateway/apiClient';
@@ -48,6 +47,59 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<SubmissionErrorState | null>(null);
   const nextIdRef = useRef(1);
+  const submissionDialogRef = useRef<HTMLElement>(null);
+  const submissionTriggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!submissionError) {
+      return;
+    }
+
+    const previouslyFocused = submissionTriggerRef.current
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const dialog = submissionDialogRef.current;
+    const focusableElements = () => Array.from(
+      dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), summary, [href], input:not(:disabled)') ?? [],
+    );
+
+    dialog?.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSubmissionError(null);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !dialog) {
+        return;
+      }
+
+      const focusable = focusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      previouslyFocused?.focus();
+      submissionTriggerRef.current = null;
+    };
+  }, [submissionError]);
 
   const selectedFiles = useMemo(() => files.map((entry) => entry.file), [files]);
   const validation = useMemo(() => validateSelectedFiles(selectedFiles), [selectedFiles]);
@@ -135,6 +187,7 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
       return;
     }
 
+    submissionTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setIsSubmitting(true);
     setSubmissionError(null);
 
@@ -188,7 +241,7 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
     <div className="stack-lg">
       <PageHeader title="Upload" subtitle="Submit one or more files as a single batch using the verified multipart contract." />
 
-      <SectionCard title="Select files" subtitle="Use file picker or drag-and-drop.">
+      <SectionCard title="New batch" subtitle="Add one or more files to extract JSON property paths.">
         <div
           className={`drop-zone${isDragActive ? ' active' : ''}`}
           onDragEnter={(event) => {
@@ -205,7 +258,7 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
           }}
           onDrop={onDrop}
         >
-          <p>Drop files here or choose files manually.</p>
+          <p>Drop files here or choose from your device.</p>
           <label className="btn btn-secondary upload-picker-button">
             Choose files
             <input aria-label="Choose files" className="upload-input" type="file" multiple onChange={onFilePickerChange} />
@@ -214,47 +267,36 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
 
         {selectionNote && <p className="selection-note">{selectionNote}</p>}
 
-        <div className="upload-actions">
+        <div className="upload-selection-header">
+          <strong>Selected files ({files.length})</strong>
+          {files.length > 0 && <span className="batch-muted">Total size: {formatFileSize(validation.totalBytes)}</span>}
           <Button variant="secondary" onClick={clearFiles} disabled={files.length === 0 || isSubmitting}>
-            Clear selection
+            Clear
           </Button>
         </div>
-      </SectionCard>
 
-      <SectionCard title="Selected files" subtitle="Filenames are preserved exactly as selected.">
         {files.length === 0 ? (
-          <DataState
-            kind="empty"
-            title="No files selected"
-            description="Choose at least one file to begin validation and submission."
-          />
+          <p className="batch-muted upload-empty-selection">No files selected.</p>
         ) : (
-          <>
-            <ul className="upload-file-list" aria-label="Selected files">
-              {files.map((entry, index) => (
-                <li key={entry.id} className={invalidFileByEntryId.has(entry.id) ? 'upload-file-invalid' : undefined}>
-                  <div>
-                    <strong>{entry.file.name}</strong>
-                    <div className="upload-file-meta">File {index + 1} · {formatFileSize(entry.file.size)}</div>
-                    {invalidFileByEntryId.has(entry.id) && (
-                      <div className="upload-file-error" role="status">{invalidFileByEntryId.get(entry.id)?.join(' · ')}</div>
-                    )}
-                  </div>
-                  <Button variant="secondary" onClick={() => removeFile(entry.id)} disabled={isSubmitting}>
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <p className="upload-total">Total size: {formatFileSize(validation.totalBytes)}</p>
-          </>
+          <ul className="upload-file-list" aria-label="Selected files">
+            {files.map((entry, index) => (
+              <li key={entry.id} className={invalidFileByEntryId.has(entry.id) ? 'upload-file-invalid' : undefined}>
+                <div>
+                  <strong>{entry.file.name}</strong>
+                  <div className="upload-file-meta">File {index + 1} · {formatFileSize(entry.file.size)}</div>
+                  {invalidFileByEntryId.has(entry.id) && (
+                    <div className="upload-file-error" role="status">{invalidFileByEntryId.get(entry.id)?.join(' · ')}</div>
+                  )}
+                </div>
+                <Button variant="secondary" onClick={() => removeFile(entry.id)} disabled={isSubmitting}>
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
-      </SectionCard>
 
-      <SectionCard title="Validation" subtitle="Limits are based on current backend upload settings.">
-        {validation.errors.length === 0 ? (
-          <DataState kind="loading" title="Ready to submit" description="All selected files satisfy current validation rules." />
-        ) : (
+        {files.length > 0 && validation.errors.length > 0 && (
           <div className="validation-errors" role="alert">
             <h3>Fix these issues before submitting</h3>
             <ul>
@@ -264,29 +306,27 @@ export function UploadPage({ onBatchCreated }: UploadPageProps) {
             </ul>
           </div>
         )}
-        <ul className="plain-list upload-limits">
-          <li>Max files per batch: {uploadLimits.maxFileCount}</li>
-          <li>Max bytes per file: {formatFileSize(uploadLimits.maxFileBytes)}</li>
-          <li>Max combined request size: {formatFileSize(uploadLimits.maxRequestBytes)}</li>
-        </ul>
-      </SectionCard>
 
-      <SectionCard title="Submit" subtitle="Submission sends all selected files in a single multipart request field named files.">
-        <div className="upload-actions">
+        <details className="upload-limits-details">
+          <summary>Upload limits</summary>
+          <ul className="plain-list upload-limits">
+            <li>Max files per batch: {uploadLimits.maxFileCount}</li>
+            <li>Max bytes per file: {formatFileSize(uploadLimits.maxFileBytes)}</li>
+            <li>Max combined request size: {formatFileSize(uploadLimits.maxRequestBytes)}</li>
+          </ul>
+        </details>
+
+        <div className="upload-submit-row">
           <Button onClick={() => void submit()} disabled={!canSubmit} aria-label="Submit batch">
             {isSubmitting ? 'Submitting…' : 'Submit batch'}
           </Button>
+          {isSubmitting && <p className="upload-progress" role="status">Uploading selected files…</p>}
         </div>
-        {isSubmitting && (
-          <p className="upload-progress" role="status">
-            Upload request in progress.
-          </p>
-        )}
       </SectionCard>
 
       {submissionError && (
         <div className="dialog-backdrop" role="presentation">
-          <section className="dialog" role="dialog" aria-modal="true" aria-label="Upload failed">
+          <section ref={submissionDialogRef} className="dialog" role="dialog" aria-modal="true" aria-label="Upload failed" tabIndex={-1}>
             <h2>{submissionError.title}</h2>
             <p>{submissionError.message}</p>
             {submissionError.details.length > 0 && (

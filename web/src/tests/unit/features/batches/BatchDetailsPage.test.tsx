@@ -74,6 +74,26 @@ describe('BatchDetailsPage', () => {
     expect(payloadGroups[0]).not.toHaveAttribute('open');
   });
 
+  it('copies an individual property path and reports clipboard failure', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.mocked(fetchBatchDetails).mockResolvedValue({ statusCode: 200, data: createBatch() });
+
+    const { container } = render(<BatchDetailsPage batchId="batch-123" onNavigateToUpload={vi.fn()} />);
+    expect(await screen.findByText('batch-123')).toBeInTheDocument();
+    const documentGroup = container.querySelector('.result-group-document');
+    expect(documentGroup).not.toBeNull();
+    fireEvent.click(documentGroup!.querySelector('summary')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy property path customer.id' }));
+
+    expect(writeText).toHaveBeenCalledWith('customer.id');
+    expect(await screen.findByText('Copied customer.id to the clipboard.')).toBeInTheDocument();
+
+    writeText.mockRejectedValueOnce(new Error('Clipboard denied.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy property path customer.id' }));
+    expect(await screen.findByText('Clipboard access is unavailable in this browser context.')).toBeInTheDocument();
+  });
+
   it('polls while the batch is processing and stops after completion', async () => {
     vi.useFakeTimers();
     vi.mocked(fetchBatchDetails)
@@ -139,6 +159,35 @@ describe('BatchDetailsPage', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
+  it('reports a timed-out initial request and schedules a bounded retry', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchBatchDetails)
+      .mockImplementationOnce(
+        (_batchId, signal) =>
+          new Promise((_, reject) => {
+            signal?.addEventListener('abort', () => reject(createAbortError()), { once: true });
+          }),
+      )
+      .mockResolvedValueOnce({ statusCode: 200, data: createBatch() });
+
+    render(<BatchDetailsPage batchId="batch-123" onNavigateToUpload={vi.fn()} />);
+
+    await flushMicrotasks();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(screen.getByText('Batch details timed out')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    await flushMicrotasks();
+
+    expect(screen.getByText('batch-123')).toBeInTheDocument();
+    expect(fetchBatchDetails).toHaveBeenCalledTimes(2);
+  });
+
   it('shows long-running processing notice without inventing failure', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-12T12:00:20Z'));
@@ -188,5 +237,20 @@ describe('BatchDetailsPage', () => {
     });
 
     expect(fetchBatchDetails).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a blocking error when navigation to a new batch fails', async () => {
+    vi.mocked(fetchBatchDetails)
+      .mockResolvedValueOnce({ statusCode: 200, data: createBatch() })
+      .mockRejectedValueOnce(new ApiError('Batch was not found.', 404, { code: 'BATCH_NOT_FOUND' }));
+
+    const { rerender } = render(<BatchDetailsPage batchId="batch-123" onNavigateToUpload={vi.fn()} />);
+
+    expect(await screen.findByText('batch-123')).toBeInTheDocument();
+
+    rerender(<BatchDetailsPage batchId="missing-batch" onNavigateToUpload={vi.fn()} />);
+
+    expect(await screen.findByText('Batch not found')).toBeInTheDocument();
+    expect(screen.queryByText('batch-123')).not.toBeInTheDocument();
   });
 });

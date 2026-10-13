@@ -212,7 +212,7 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
           });
         }
       } catch (error) {
-        if (requestIdRef.current !== requestId || isAbortError(error)) {
+        if (requestIdRef.current !== requestId) {
           return;
         }
 
@@ -258,6 +258,7 @@ export function useBatchDetails(batchId: string | null): UseBatchDetailsResult {
 
   useEffect(() => {
     retryAttemptRef.current = 0;
+    batchRef.current = null;
     setBatch(null);
     setBlockingError(null);
     setRefreshWarning(null);

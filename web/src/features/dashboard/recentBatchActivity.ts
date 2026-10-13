@@ -52,7 +52,11 @@ export function loadRecentBatchActivity(): RecentBatchActivityEntry[] {
     return [];
   }
 
-  return parseEntries(localStorage.getItem(recentBatchActivityStorageKey));
+  try {
+    return parseEntries(localStorage.getItem(recentBatchActivityStorageKey));
+  } catch {
+    return [];
+  }
 }
 
 export function recordRecentBatchActivity(batchId: string): void {

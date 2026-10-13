@@ -43,6 +43,22 @@
   flex-wrap: wrap;
 }
 
+.upload-selection-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.upload-selection-header button {
+  margin-left: auto;
+}
+
+.upload-empty-selection {
+  margin: 0.5rem 0;
+}
+
 .upload-file-list {
   margin: 0;
   padding: 0;
@@ -59,6 +75,15 @@
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
+}
+
+.upload-file-list li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.upload-file-list li .btn {
+  flex: 0 0 auto;
 }
 
 .upload-file-meta {
@@ -101,6 +126,25 @@
   margin-top: 0.8rem;
 }
 
+.upload-limits-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.upload-submit-row {
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.upload-submit-row .upload-progress {
+  margin: 0;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -114,6 +158,8 @@
 
 .dialog {
   width: min(640px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
   border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: var(--panel);

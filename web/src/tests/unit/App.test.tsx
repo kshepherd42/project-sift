@@ -48,6 +48,20 @@ describe('App', () => {
     expect(await screen.findByRole('button', { name: 'Open batch test-batch-123' })).toBeInTheDocument();
   });
 
+  it('keeps the dashboard usable when recent-activity storage is unavailable', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+      if (key === 'projectsift-recent-batches') {
+        throw new DOMException('Storage is unavailable.');
+      }
+
+      return null;
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('No recent activity yet')).toBeInTheDocument();
+  });
+
   it('navigates to upload route', async () => {
     render(<App />);
 

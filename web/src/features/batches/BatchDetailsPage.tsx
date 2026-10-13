@@ -62,7 +62,15 @@ function DiagnosticsPanel({ diagnostics, scopeLabel }: { diagnostics: BatchDiagn
   );
 }
 
-function DocumentGroup({ document, order }: { document: BatchDocument; order: number }) {
+function DocumentGroup({
+  document,
+  order,
+  onCopyPropertyPath,
+}: {
+  document: BatchDocument;
+  order: number;
+  onCopyPropertyPath: (propertyPath: string) => void;
+}) {
   const status = interpretDocumentStatus(document.status);
 
   return (
@@ -83,7 +91,16 @@ function DocumentGroup({ document, order }: { document: BatchDocument; order: nu
           ) : (
             <ul className="plain-list property-path-list">
               {document.propertyPaths.map((propertyPath, index) => (
-                <li key={`${document.key}-path-${index}`}>{propertyPath}</li>
+                <li key={`${document.key}-path-${index}`}>
+                  <span>{propertyPath}</span>
+                  <Button
+                    variant="secondary"
+                    aria-label={`Copy property path ${propertyPath}`}
+                    onClick={() => onCopyPropertyPath(propertyPath)}
+                  >
+                    Copy
+                  </Button>
+                </li>
               ))}
             </ul>
           )}
@@ -98,7 +115,15 @@ function DocumentGroup({ document, order }: { document: BatchDocument; order: nu
   );
 }
 
-function PayloadGroup({ payload, order }: { payload: BatchPayload; order: number }) {
+function PayloadGroup({
+  payload,
+  order,
+  onCopyPropertyPath,
+}: {
+  payload: BatchPayload;
+  order: number;
+  onCopyPropertyPath: (propertyPath: string) => void;
+}) {
   const summary = deriveBatchDetailsSummary({
     batchId: 'payload-only',
     status: 'Completed',
@@ -133,7 +158,12 @@ function PayloadGroup({ payload, order }: { payload: BatchPayload; order: number
           ) : (
             <div className="stack-sm">
               {payload.documents.map((document, documentOrder) => (
-                <DocumentGroup key={document.key} document={document} order={documentOrder} />
+                <DocumentGroup
+                  key={document.key}
+                  document={document}
+                  order={documentOrder}
+                  onCopyPropertyPath={onCopyPropertyPath}
+                />
               ))}
             </div>
           )}
@@ -147,6 +177,15 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
   const [searchQuery, setSearchQuery] = useState('');
   const [pathMode, setPathMode] = useState<BatchPathMode>('occurrences');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
+  async function copyPropertyPath(propertyPath: string) {
+    try {
+      await copyTextToClipboard(propertyPath);
+      setFeedbackMessage(`Copied ${propertyPath} to the clipboard.`);
+    } catch {
+      setFeedbackMessage('Clipboard access is unavailable in this browser context.');
+    }
+  }
 
   const {
     batch,
@@ -224,8 +263,9 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
       return;
     }
 
-    const rows = createBatchCsvRows(batch.batchId, matchingPathOccurrences);
-    const filename = buildBatchExportFilename(batch.batchId, 'csv', pathMode);
+    const occurrences = searchBatchPathOccurrences(batch, searchQuery, 'occurrences');
+    const rows = createBatchCsvRows(batch.batchId, occurrences);
+    const filename = buildBatchExportFilename(batch.batchId, 'csv', 'occurrences');
     triggerDownload(serializeBatchCsv(rows), filename, 'text/csv');
     setFeedbackMessage(`Exported ${formatCount(rows.length)} path${rows.length === 1 ? '' : 's'} as CSV.`);
   }
@@ -378,8 +418,8 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
             <Button variant="secondary" onClick={() => void handleCopyDiagnosticMatches()} disabled={matchingDiagnosticEntries.length === 0}>
               Copy matching diagnostics
             </Button>
-            <Button variant="secondary" onClick={handleExportCsv} disabled={selectedPathCount === 0}>
-              Export CSV
+            <Button variant="secondary" onClick={handleExportCsv} disabled={searchResults?.pathOccurrences.length === 0}>
+              Export CSV (all occurrences)
             </Button>
             <Button variant="secondary" onClick={handleExportJson} disabled={selectedPathCount === 0}>
               Export JSON
@@ -497,7 +537,12 @@ export function BatchDetailsPage({ batchId, onNavigateToUpload }: BatchDetailsPa
         ) : (
           <div className="stack-sm">
             {batch.payloads.map((payload, payloadOrder) => (
-              <PayloadGroup key={payload.key} payload={payload} order={payloadOrder} />
+              <PayloadGroup
+                key={payload.key}
+                payload={payload}
+                order={payloadOrder}
+                onCopyPropertyPath={(propertyPath) => void copyPropertyPath(propertyPath)}
+              />
             ))}
           </div>
         )}

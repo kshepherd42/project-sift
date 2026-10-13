@@ -37,6 +37,7 @@
 .metric-list dd {
   margin: 0;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .status-badge {

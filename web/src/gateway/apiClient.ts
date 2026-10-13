@@ -1,7 +1,25 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5050';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const apiBaseUrl = configuredApiBaseUrl || (import.meta.env.DEV ? 'http://localhost:5050' : null);
 
 export function buildApiUrl(path: string): string {
-  return `${apiBaseUrl}${path}`;
+  if (!apiBaseUrl) {
+    throw new ApiError('API base URL is not configured. Set VITE_API_BASE_URL to the backend origin.', 0, {
+      code: 'API_CONFIGURATION_MISSING',
+    });
+  }
+
+  try {
+    const parsedBaseUrl = new URL(apiBaseUrl);
+    if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
+      throw new Error('Unsupported API base URL protocol.');
+    }
+
+    return new URL(path, parsedBaseUrl).toString();
+  } catch {
+    throw new ApiError('VITE_API_BASE_URL must be a valid absolute HTTP or HTTPS URL.', 0, {
+      code: 'API_CONFIGURATION_INVALID',
+    });
+  }
 }
 
 export type ApiResult<T> = {
